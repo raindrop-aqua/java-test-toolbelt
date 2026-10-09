@@ -1,8 +1,10 @@
 # DbJigu (DB治具)
 
+English | [日本語](README.ja.md)
+
 A test helper that sets up and verifies database state from plain-text fixture files.
 
-DbJigu is distributed as source, not as a JAR. Copy [`DbJigu.java`](src/test/java/com/prism7/testtoolbelt/DbJigu.java) into your project's test sources and change its package. It needs only Java 17+ and a JDBC driver.
+DbJigu is distributed as source, not as a JAR. Copy [`DbJigu.java`](src/test/java/com/prism7/testtoolbelt/DbJigu.java) into your project's test sources (e.g. `src/test/java/<your package>/utils`) and change its package. It needs only Java 17+ and a JDBC driver.
 
 ## Usage
 
