@@ -26,7 +26,7 @@ Every example in this guide is a real, passing test. The code is in [OrderServic
 2. Change the `package` line at the top of the file to match where you copied it.
 3. Make sure the JDBC driver for your database is a test dependency.
 
-All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.1.2`) tells you which version you copied.
+All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.2.0`) tells you which version you copied.
 
 ### 1.2 API at a glance
 
@@ -173,6 +173,7 @@ value1|<null>|value3
 | `value1\|value2` | Each line is one row in the DB. |
 | `<null>` | NULL |
 | Blank line | Ignored. Use blank lines to separate tables. |
+| `// comment` | A line starting with `//` is ignored ([Comments](#comments)). |
 
 - Files are UTF-8 and the separator is `|`. Spaces around each value are removed.
 - Values are converted to the column's type (read from the DB).
@@ -322,26 +323,32 @@ P002|ノート|300|50
 [cancel/given.txt](../src/test/resources/data/order/cancel/given.txt) is the starting data for the cancel test.
 
 ```
+// 顧客
 [customer]
 {customer_id|customer_name|customer_rank}
 C001|山田 太郎|REGULAR
 
+// 商品
 [product]
 {product_code|product_name|unit_price|stock}
 P001|ボールペン|120|96
 P002|ノート|300|48
 
+// 受注
 [orders]
 {order_no|customer_id|status|total_amount|note|ordered_at|shipped_at|updated_at}
 A001|C001|RECEIVED|960|<null>|2024-04-01 10:00|<null>|2024-04-01 10:00
 A002|C001|SHIPPED|120|<null>|2024-04-01 11:00|2024-04-02 09:00|2024-04-02 09:00
 
+// 受注明細
 [order_item]
 {order_no|line_no|product_code|quantity|amount}
 A001|1|P001|3|360
 A001|2|P002|2|600
 A002|1|P001|1|120
 ```
+
+Lines starting with `//` are comments. Writing the table's name in your own language makes the file easier to read.
 
 Tables are **inserted in the order they are written**. With foreign keys, write the referenced (parent) table first. Here the order is `customer` → `product` → `orders` → `order_item`.
 
@@ -653,6 +660,15 @@ In PostgreSQL, inserting explicit values into an `IDENTITY` or `serial` column d
 - You don't need to compare it → `@`
 - You want to check that it was updated → compare with the inserted value using `>`
 
+### Comments
+
+Lines starting with `//` are ignored for both import and verification. Leading spaces are ignored, so you can indent them.
+
+- Write a table's name in your own language, or what the data is for
+- Temporarily leave a row out of import and verification (`// A001|1|P001|3|360`)
+
+A comment cannot start in the middle of a line. The `//` in `A001|https://example.com` is part of the value. If you comment out every row to verify, you get an error, so a test never passes without verifying anything.
+
 ### Empty strings and NULL
 
 `<null>` is NULL, and an empty field (the middle of `A001||C001`) is an empty string. An empty field at the end of a line is also an empty string. Note that Oracle treats an empty string as NULL (this is not tested in this repository).
@@ -683,7 +699,8 @@ In these cases, delete the data yourself after the test.
 | A value with leading or trailing spaces | Spaces around values are removed |
 | The string `<null>` | It means NULL |
 | A value that puts `[` or `{` at the start of a line | The line is read as a table name or column list (under discussion in [#12](https://github.com/raindrop-aqua/java-test-toolbelt/issues/12)) |
-| Comments | There is no comment syntax. A line starting with `#` is read as a data row |
+| A value that starts a line with `//` | The line is read as a comment |
+| A comment in the middle of a line | Only a `//` at the start of a line makes a comment. A line starting with `#` is read as a data row |
 
 ### 7.2 Error messages
 
