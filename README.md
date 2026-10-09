@@ -6,6 +6,8 @@ A test helper that sets up and verifies database state from plain-text fixture f
 
 DbJigu is distributed as source, not as a JAR. Copy [`DbJigu.java`](src/test/java/com/prism7/testtoolbelt/DbJigu.java) into your project's test sources (e.g. `src/test/java/<your package>/utils`) and change its package. It needs only Java 17+ and a JDBC driver.
 
+To learn how to write tests with DbJigu, step by step with a worked example, read the [Test Writing Guide](docs/guide.md).
+
 ## Usage
 
 ```java
