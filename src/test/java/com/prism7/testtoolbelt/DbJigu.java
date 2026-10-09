@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.0.0
+ * DB治具（DbJigu） v2.1.0
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -52,8 +52,26 @@ import java.util.stream.Collectors;
  *   <li>値の前後の空白は取り除く。{@code <null>} は NULL を表す。</li>
  *   <li>値は列の型（DBから取得）に合わせて変換して渡す。日付は {@code 2024-04-01} / {@code 2024/04/01}、
  *       日時は {@code 2024-04-01 12:34:56[.123]} の形式で記述する。</li>
- *   <li>列名の末尾に {@code @} を付けた列は、比較の対象外とする（投入は行う）。</li>
  *   <li>CLOB 等の LOB 列は SQL の {@code =} で比較できないため、それ以外の列で絞り込んだ後に Java 側で比較する。</li>
+ * </ul>
+ *
+ * <h2>比較の条件</h2>
+ * 比較では、列名の末尾に記号を付けると完全一致以外の条件にできる。記号は1つの列に1つだけ付けられる。
+ * 投入では記号を無視し、値をそのまま投入する。
+ * <table>
+ *   <tr><th>記号</th><th>条件</th></tr>
+ *   <tr><td>なし</td><td>DBの値 = ファイルの値</td></tr>
+ *   <tr><td>{@code @}</td><td>比較しない</td></tr>
+ *   <tr><td>{@code <} {@code <=} {@code >} {@code >=}</td><td>DBの値 &lt; ファイルの値 など（左がDBの値）</td></tr>
+ *   <tr><td>{@code !=}</td><td>DBの値 ≠ ファイルの値（DBの値が NULL の行も含む）</td></tr>
+ *   <tr><td>{@code %}</td><td>DBの値がファイルの値で始まる（前方一致）。文字列の列だけに使える</td></tr>
+ * </table>
+ * <ul>
+ *   <li>{@code <null>} はどの記号でも {@code IS NULL} として扱う。{@code !=} の場合だけ {@code IS NOT NULL} になる。</li>
+ *   <li>比較では同じ列を2回書ける。{@code {id|amount>=|amount<}} のように範囲を指定できる（投入ではエラー）。</li>
+ *   <li>{@code %} の値に含まれる {@code %} と {@code _} は、文字そのものとして扱う。</li>
+ *   <li>文字列の大小はDBの照合順序で決まるため、大小比較は主に数値と日時に使う。</li>
+ *   <li>LOB 列には大小比較の記号を付けられない。</li>
  * </ul>
  *
  * <h2>パターン番号</h2>
@@ -79,7 +97,8 @@ public class DbJigu {
     private static final String NULL_VALUE = "<null>";
     private static final String PATTERN_COLUMN = "#";
     private static final String PATTERN_SEPARATOR = ",";
-    private static final String IGNORE_MARK = "@";
+    private static final String MARK_CHARACTERS = "@<>=!%";
+    private static final char LIKE_ESCAPE = '!';
 
     private static final DateTimeFormatter DATE_TIME_FORMAT = new DateTimeFormatterBuilder()
             .appendPattern("uuuu-MM-dd HH:mm")
@@ -105,6 +124,13 @@ public class DbJigu {
         for (Section section : readFile(filePath, patterns)) {
             if (section.rows.isEmpty()) {
                 continue;
+            }
+            Set<String> names = new LinkedHashSet<>();
+            for (Column column : section.columns) {
+                if (!names.add(column.name.toLowerCase(Locale.ROOT))) {
+                    throw formatError(filePath, section.headerLineNumber,
+                            "投入では同じ列を2回書けません: " + column.name);
+                }
             }
             int[] types = resolveTypes(section);
             String sql = "INSERT INTO " + section.tableName
@@ -189,6 +215,7 @@ public class DbJigu {
                 continue;
             }
             int[] types = resolveTypes(section);
+            validateOperators(filePath, section, types);
             for (Row row : section.rows) {
                 String description = String.format("%s:%d [%s] %s", filePath, row.lineNumber, section.tableName, row.text);
                 if (exists(section, types, row) == expectExists) {
@@ -209,19 +236,27 @@ public class DbJigu {
         List<String> conditions = new ArrayList<>();
         for (int i = 0; i < section.columns.size(); i++) {
             Column column = section.columns.get(i);
-            if (column.ignored) {
+            if (column.operator == Operator.IGNORE) {
                 continue;
             }
             if (isLob(types[i])) {
                 lobIndexes.add(i);
-            } else if (row.values.get(i) == null) {
-                conditions.add(column.name + " IS NULL");
-            } else {
-                // CHAR型は空白で埋められるため、末尾の空白を除いて比較する
-                boolean isChar = types[i] == Types.CHAR || types[i] == Types.NCHAR;
-                conditions.add((isChar ? "RTRIM(" + column.name + ")" : column.name) + " = ?");
-                whereIndexes.add(i);
+                continue;
             }
+            if (row.values.get(i) == null) {
+                conditions.add(column.name + (column.operator == Operator.NOT_EQUAL ? " IS NOT NULL" : " IS NULL"));
+                continue;
+            }
+            // CHAR型は空白で埋められるため、末尾の空白を除いて比較する
+            boolean isChar = types[i] == Types.CHAR || types[i] == Types.NCHAR;
+            String target = isChar ? "RTRIM(" + column.name + ")" : column.name;
+            switch (column.operator) {
+                case PREFIX -> conditions.add(target + " LIKE ? ESCAPE '" + LIKE_ESCAPE + "'");
+                // SQL では NULL <> 値 が真にならないため、NULL の行も等しくないものとして含める
+                case NOT_EQUAL -> conditions.add("(" + target + " <> ? OR " + column.name + " IS NULL)");
+                default -> conditions.add(target + " " + column.operator.sql + " ?");
+            }
+            whereIndexes.add(i);
         }
         String selectList = lobIndexes.isEmpty() ? "1"
                 : lobIndexes.stream().map(i -> section.columns.get(i).name).collect(Collectors.joining(", "));
@@ -231,11 +266,15 @@ public class DbJigu {
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (int p = 0; p < whereIndexes.size(); p++) {
                 int i = whereIndexes.get(p);
-                bind(ps, p + 1, types[i], row.values.get(i), row);
+                if (section.columns.get(i).operator == Operator.PREFIX) {
+                    ps.setString(p + 1, escapeLike(row.values.get(i)) + "%");
+                } else {
+                    bind(ps, p + 1, types[i], row.values.get(i), row);
+                }
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    if (lobsMatch(rs, lobIndexes, row)) {
+                    if (lobsMatch(rs, section, lobIndexes, row)) {
                         return true;
                     }
                 }
@@ -247,15 +286,57 @@ public class DbJigu {
     }
 
     // LOB列の値を Java 側で比較する
-    private boolean lobsMatch(ResultSet rs, List<Integer> lobIndexes, Row row) throws SQLException {
+    private boolean lobsMatch(ResultSet rs, Section section, List<Integer> lobIndexes, Row row) throws SQLException {
         for (int p = 0; p < lobIndexes.size(); p++) {
-            String expected = row.values.get(lobIndexes.get(p));
-            String actual = rs.getString(p + 1);
-            if (expected == null ? actual != null : !expected.equals(actual)) {
+            int i = lobIndexes.get(p);
+            if (!matchesInJava(section.columns.get(i).operator, row.values.get(i), rs.getString(p + 1))) {
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean matchesInJava(Operator operator, String expected, String actual) {
+        if (expected == null) {
+            return operator == Operator.NOT_EQUAL ? actual != null : actual == null;
+        }
+        return switch (operator) {
+            case PREFIX -> actual != null && actual.startsWith(expected);
+            case NOT_EQUAL -> !expected.equals(actual);
+            default -> expected.equals(actual);
+        };
+    }
+
+    // LIKE の値に含まれる記号を、文字そのものとして扱うようにエスケープする
+    private static String escapeLike(String value) {
+        StringBuilder escaped = new StringBuilder();
+        for (char c : value.toCharArray()) {
+            if (c == LIKE_ESCAPE || c == '%' || c == '_') {
+                escaped.append(LIKE_ESCAPE);
+            }
+            escaped.append(c);
+        }
+        return escaped.toString();
+    }
+
+    // 列の型に使えない記号が付いていないか確認する
+    private static void validateOperators(String filePath, Section section, int[] types) {
+        for (int i = 0; i < section.columns.size(); i++) {
+            Column column = section.columns.get(i);
+            if (column.operator == Operator.PREFIX && !isCharacter(types[i])) {
+                throw formatError(filePath, section.headerLineNumber,
+                        "% は文字列の列だけに使えます: " + column.name);
+            }
+            if (column.operator.ordering && isLob(types[i])) {
+                throw formatError(filePath, section.headerLineNumber,
+                        "LOB 列は大小比較できません: " + column.name + column.operator.mark);
+            }
+        }
+    }
+
+    private static boolean isCharacter(int type) {
+        return type == Types.CHAR || type == Types.VARCHAR || type == Types.NCHAR || type == Types.NVARCHAR
+                || isLob(type);
     }
 
     private static boolean isLob(int type) {
@@ -405,17 +486,20 @@ public class DbJigu {
         }
         List<Column> columns = new ArrayList<>();
         for (String name : names) {
-            boolean ignored = name.endsWith(IGNORE_MARK);
-            String columnName = ignored ? name.substring(0, name.length() - IGNORE_MARK.length()).trim() : name;
+            Operator operator = Operator.of(name);
+            String columnName = name.substring(0, name.length() - operator.mark.length()).trim();
             if (columnName.isEmpty()) {
                 throw formatError(filePath, lineNumber, "空の列名があります");
             }
-            columns.add(new Column(columnName, ignored));
+            if (MARK_CHARACTERS.indexOf(columnName.charAt(columnName.length() - 1)) >= 0) {
+                throw formatError(filePath, lineNumber, "列名の末尾の記号は1つだけ付けられます: " + name);
+            }
+            columns.add(new Column(columnName, operator));
         }
         if (columns.isEmpty()) {
             throw formatError(filePath, lineNumber, "列名がありません");
         }
-        return new Section(tableName, columns, hasPattern);
+        return new Section(tableName, columns, hasPattern, lineNumber);
     }
 
     private static Row parseRow(String filePath, int lineNumber, Section section, String line) {
@@ -456,16 +540,50 @@ public class DbJigu {
         final String tableName;
         final List<Column> columns;
         final boolean hasPattern;
+        final int headerLineNumber;
         final List<Row> rows = new ArrayList<>();
 
-        Section(String tableName, List<Column> columns, boolean hasPattern) {
+        Section(String tableName, List<Column> columns, boolean hasPattern, int headerLineNumber) {
             this.tableName = tableName;
             this.columns = columns;
             this.hasPattern = hasPattern;
+            this.headerLineNumber = headerLineNumber;
         }
     }
 
-    private record Column(String name, boolean ignored) {
+    // 列名の末尾の記号と、比較の条件
+    private enum Operator {
+        // <= などの2文字の記号を、< などより先に判定する
+        LESS_EQUAL("<=", "<=", true),
+        GREATER_EQUAL(">=", ">=", true),
+        NOT_EQUAL("!=", "<>", false),
+        LESS("<", "<", true),
+        GREATER(">", ">", true),
+        PREFIX("%", "LIKE", false),
+        IGNORE("@", null, false),
+        EQUAL("", "=", false);
+
+        final String mark;
+        final String sql;
+        final boolean ordering;
+
+        Operator(String mark, String sql, boolean ordering) {
+            this.mark = mark;
+            this.sql = sql;
+            this.ordering = ordering;
+        }
+
+        static Operator of(String name) {
+            for (Operator operator : values()) {
+                if (operator != EQUAL && name.endsWith(operator.mark)) {
+                    return operator;
+                }
+            }
+            return EQUAL;
+        }
+    }
+
+    private record Column(String name, Operator operator) {
     }
 
     private record Row(int lineNumber, String text, Set<Integer> patterns, List<String> values) {

@@ -183,6 +183,105 @@ class DbJiguTest {
     }
 
     @Nested
+    class 比較の条件 {
+
+        @BeforeEach
+        void importSample() {
+            jigu.importFrom(DATA + "sample.txt");
+        }
+
+        @Test
+        void 大小比較は境界の値を正しく扱う(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]",
+                    "{string_column|numeric_column<=|numeric_column<|numeric_column>=|numeric_column>}",
+                    "String2|234.56|234.57|234.56|234.55");
+            jigu.assertExists(file);
+
+            assertEquals(1, jigu.verifyExists(write(dir, "[TestTable]",
+                    "{string_column|numeric_column<}", "String2|234.56")));
+            assertEquals(1, jigu.verifyExists(write(dir, "[TestTable]",
+                    "{string_column|numeric_column>}", "String2|234.56")));
+        }
+
+        @Test
+        void 同じ列を2回書いて範囲を指定できる(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]",
+                    "{timestamp_column>=|timestamp_column<}",
+                    "2024-04-02|2024-04-03",
+                    "2024-04-06|2024-04-07");
+            // 2行目の範囲には該当するデータがない
+            assertEquals(1, jigu.verifyExists(file));
+        }
+
+        @Test
+        void 等しくないことを検証できる(@TempDir Path dir) {
+            assertEquals(1, jigu.verifyExists(write(dir, "[Member]",
+                    "{MemberId|MemberName!=}", "1|sam", "1|john")));
+        }
+
+        @Test
+        void 等しくないの比較ではNULLの行も含める(@TempDir Path dir) {
+            update("UPDATE Member SET MemberName = NULL WHERE MemberId = 2");
+            jigu.assertExists(write(dir, "[Member]", "{MemberId|MemberName!=}", "2|john"));
+        }
+
+        @Test
+        void NULLは記号に関わらずIS_NULLで比較する(@TempDir Path dir) {
+            update("UPDATE Member SET MemberName = NULL WHERE MemberId = 2");
+            String file = write(dir, "[Member]", "{MemberId|MemberName>=}", "1|<null>", "2|<null>");
+            assertEquals(1, jigu.verifyExists(file));
+        }
+
+        @Test
+        void 等しくないとNULLの組み合わせはIS_NOT_NULLで比較する(@TempDir Path dir) {
+            update("UPDATE Member SET MemberName = NULL WHERE MemberId = 2");
+            String file = write(dir, "[Member]", "{MemberId|MemberName!=}", "1|<null>", "2|<null>");
+            assertEquals(1, jigu.verifyExists(file));
+        }
+
+        @Test
+        void 前方一致で比較できる(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]", "{string_column%}", "Str", "String1", "tring");
+            assertEquals(1, jigu.verifyExists(file));
+        }
+
+        @Test
+        void 前方一致の値に含まれる記号は文字として扱う(@TempDir Path dir) {
+            jigu.importFrom(write(dir, "[Member]", "{MemberId|MemberName}", "3|AB_C", "4|10%OFF!"));
+            jigu.assertExists(write(dir, "[Member]", "{MemberName%}", "AB_", "10%", "10%OFF!"));
+            jigu.assertNotExists(write(dir, "[Member]", "{MemberName%}", "A_", "1%O", "10!"));
+        }
+
+        @Test
+        void 前方一致は文字列以外の列に使えない(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]", "{numeric_column%}", "123");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.verifyExists(file));
+            assertTrue(error.getMessage().contains("numeric_column"), error.getMessage());
+        }
+
+        @Test
+        void 記号を組み合わせるとエラーにする(@TempDir Path dir) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> jigu.verifyExists(write(dir, "[TestTable]", "{numeric_column@<}", "1")));
+            assertThrows(IllegalArgumentException.class,
+                    () -> jigu.verifyExists(write(dir, "[TestTable]", "{numeric_column=}", "1")));
+        }
+
+        @Test
+        void 記号の付いた列も投入では値をそのまま入れる(@TempDir Path dir) {
+            jigu.importFrom(write(dir, "[Member]", "{MemberId>=|MemberName%}", "3|bob"));
+            jigu.assertExists(write(dir, "[Member]", "{MemberId|MemberName}", "3|bob"));
+        }
+
+        @Test
+        void 投入では同じ列を2回書けない(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{MemberId>=|MEMBERID<}", "1|2");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().contains(":2 "), error.getMessage());
+        }
+    }
+
+    @Nested
     class ファイルの誤り {
 
         @Test
