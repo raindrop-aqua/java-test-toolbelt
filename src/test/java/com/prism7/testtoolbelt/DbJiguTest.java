@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -19,6 +21,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -85,16 +88,21 @@ class DbJiguTest {
     @Nested
     class パターン番号 {
 
-        @Test
-        void 指定したパターンと共通の行だけ投入する() {
-            assertEquals(3, jigu.importFrom(DATA + "patterns.txt", 1));
-            assertEquals(List.of("common", "john", "both"), memberNames());
-        }
+        // 1つのテストメソッドでパターンを切り替える例。パターンごとにファイルやメソッドを分けずに済む
+        @ParameterizedTest(name = "パターン {0} → {1}", quoteTextArguments = false)
+        @CsvSource(delimiter = '|', textBlock = """
+                1   | common,john,both
+                2   | common,sam,both
+                3   | common,mike
+                1,3 | common,john,both,mike
+                """)
+        void パターンを切り替えて投入と検証を行う(String patternText, String expectedNames) {
+            int[] patterns = Arrays.stream(patternText.split(",")).mapToInt(Integer::parseInt).toArray();
+            List<String> expected = List.of(expectedNames.split(","));
 
-        @Test
-        void 複数のパターンを指定できる() {
-            assertEquals(4, jigu.importFrom(DATA + "patterns.txt", 1, 3));
-            assertEquals(List.of("common", "john", "both", "mike"), memberNames());
+            assertEquals(expected.size(), jigu.importFrom(DATA + "patterns.txt", patterns));
+            assertEquals(expected, memberNames());
+            jigu.assertExists(DATA + "patterns.txt", patterns);
         }
 
         @Test
