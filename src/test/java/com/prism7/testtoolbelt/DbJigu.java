@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,7 +33,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.1.0
+ * DB治具（DbJigu） v2.1.1
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -104,7 +105,9 @@ public class DbJigu {
             .appendPattern("uuuu-MM-dd HH:mm")
             .optionalStart().appendPattern(":ss")
             .optionalStart().appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
-            .toFormatter();
+            .toFormatter()
+            // 2024-02-30 などの存在しない日付を、月末に丸めずにエラーにする
+            .withResolverStyle(ResolverStyle.STRICT);
 
     private final Connection connection;
 
@@ -132,19 +135,20 @@ public class DbJigu {
                             "投入では同じ列を2回書けません: " + column.name);
                 }
             }
-            int[] types = resolveTypes(section);
+            int[] types = resolveTypes(filePath, section);
             String sql = "INSERT INTO " + section.tableName + " (" + columnList(section)
                     + ") VALUES (" + String.join(", ", Collections.nCopies(section.columns.size(), "?")) + ")";
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 for (Row row : section.rows) {
                     for (int i = 0; i < row.values.size(); i++) {
-                        bind(ps, i + 1, types[i], row.values.get(i), row);
+                        bind(ps, i + 1, types[i], row.values.get(i), filePath, row);
                     }
                     ps.addBatch();
                 }
                 ps.executeBatch();
             } catch (SQLException e) {
-                throw new IllegalStateException("投入に失敗しました: " + filePath + " [" + section.tableName + "] " + sql, e);
+                throw new IllegalStateException(
+                        location(filePath, section.headerLineNumber) + " 投入に失敗しました: " + sql, e);
             }
             System.out.printf("投入件数: %d 実行SQL: %s%n", section.rows.size(), sql);
             total += section.rows.size();
@@ -214,11 +218,11 @@ public class DbJigu {
             if (section.rows.isEmpty()) {
                 continue;
             }
-            int[] types = resolveTypes(section);
+            int[] types = resolveTypes(filePath, section);
             validateOperators(filePath, section, types);
             for (Row row : section.rows) {
                 String description = String.format("%s:%d [%s] %s", filePath, row.lineNumber, section.tableName, row.text);
-                if (exists(section, types, row) == expectExists) {
+                if (exists(filePath, section, types, row) == expectExists) {
                     System.out.println("○: " + description);
                 } else {
                     System.out.println("×: " + description);
@@ -230,7 +234,7 @@ public class DbJigu {
     }
 
     // 行がDBに存在するか判定する
-    private boolean exists(Section section, int[] types, Row row) {
+    private boolean exists(String filePath, Section section, int[] types, Row row) {
         List<Integer> whereIndexes = new ArrayList<>();
         List<Integer> lobIndexes = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
@@ -269,7 +273,7 @@ public class DbJigu {
                 if (section.columns.get(i).operator == Operator.PREFIX) {
                     ps.setString(p + 1, escapeLike(row.values.get(i)) + "%");
                 } else {
-                    bind(ps, p + 1, types[i], row.values.get(i), row);
+                    bind(ps, p + 1, types[i], row.values.get(i), filePath, row);
                 }
             }
             try (ResultSet rs = ps.executeQuery()) {
@@ -281,7 +285,7 @@ public class DbJigu {
                 return false;
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("検証に失敗しました: 行" + row.lineNumber + " " + sql, e);
+            throw new IllegalStateException(location(filePath, row.lineNumber) + " 検証に失敗しました: " + sql, e);
         }
     }
 
@@ -345,7 +349,7 @@ public class DbJigu {
     }
 
     // 列の型をDBのメタデータから取得する
-    private int[] resolveTypes(Section section) {
+    private int[] resolveTypes(String filePath, Section section) {
         String sql = "SELECT " + columnList(section) + " FROM " + section.tableName + " WHERE 1 = 0";
         try (Statement statement = connection.createStatement();
              ResultSet rs = statement.executeQuery(sql)) {
@@ -356,7 +360,8 @@ public class DbJigu {
             }
             return types;
         } catch (SQLException e) {
-            throw new IllegalStateException("列の型を取得できません: " + sql, e);
+            throw new IllegalStateException(
+                    location(filePath, section.headerLineNumber) + " 列の型を取得できません: " + sql, e);
         }
     }
 
@@ -365,16 +370,21 @@ public class DbJigu {
     }
 
     // 値を列の型に合わせて変換し、バインドする
-    private static void bind(PreparedStatement ps, int index, int type, String value, Row row) throws SQLException {
+    private static void bind(PreparedStatement ps, int index, int type, String value, String filePath, Row row)
+            throws SQLException {
         if (value == null) {
             ps.setNull(index, type);
             return;
         }
         try {
             switch (type) {
+                // Oracle の FLOAT 型は内部が NUMBER のため、精度を落とさないよう BigDecimal で渡す
                 case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT,
-                     Types.NUMERIC, Types.DECIMAL, Types.REAL, Types.FLOAT, Types.DOUBLE ->
+                     Types.NUMERIC, Types.DECIMAL, Types.FLOAT ->
                         ps.setBigDecimal(index, new BigDecimal(value));
+                // 浮動小数点の列を numeric で比較すると、誤差で一致しなくなるため列と同じ精度で渡す
+                case Types.REAL -> ps.setFloat(index, (float) toFloatingPoint(value, true));
+                case Types.DOUBLE -> ps.setDouble(index, toFloatingPoint(value, false));
                 case Types.DATE -> {
                     // OracleのDATE型は時刻を持つため、時刻が書かれていれば日時として渡す
                     LocalDateTime dateTime = parseDateTime(value);
@@ -393,8 +403,19 @@ public class DbJigu {
                 default -> ps.setString(index, value);
             }
         } catch (IllegalArgumentException | DateTimeParseException e) {
-            throw new IllegalArgumentException("値を列の型に変換できません: 行" + row.lineNumber + " 値=" + value, e);
+            throw new IllegalArgumentException(
+                    location(filePath, row.lineNumber) + " 値を列の型に変換できません: " + value, e);
         }
+    }
+
+    // Float.parseFloat などは範囲外の値を Infinity や 0 に丸めるため、BigDecimal で解析して範囲を確認する
+    private static double toFloatingPoint(String value, boolean isFloat) {
+        BigDecimal decimal = new BigDecimal(value);
+        double converted = isFloat ? decimal.floatValue() : decimal.doubleValue();
+        if (Double.isInfinite(converted) || (converted == 0 && decimal.signum() != 0)) {
+            throw new IllegalArgumentException("範囲外の値です: " + value);
+        }
+        return converted;
     }
 
     private static boolean hasTime(String value) {
@@ -430,6 +451,7 @@ public class DbJigu {
         Set<Integer> foundPatterns = new LinkedHashSet<>();
         List<Section> sections = new ArrayList<>();
         String tableName = null;
+        int tableLineNumber = 0;
         Section section = null;
 
         for (int n = 0; n < lines.size(); n++) {
@@ -445,20 +467,22 @@ public class DbJigu {
                 if (!line.endsWith("]") || line.length() == 2) {
                     throw formatError(filePath, lineNumber, "テーブル名は [テーブル名] の形式で記述してください");
                 }
+                requireHeader(filePath, tableName, tableLineNumber, section);
                 tableName = line.substring(1, line.length() - 1).trim();
+                tableLineNumber = lineNumber;
                 section = null;
             } else if (line.startsWith("{")) {
                 if (tableName == null) {
                     throw formatError(filePath, lineNumber, "列名の前に [テーブル名] を記述してください");
                 }
                 if (!line.endsWith("}")) {
-                    throw formatError(filePath, lineNumber, "列名は {列名1;列名2} の形式で記述してください");
+                    throw formatError(filePath, lineNumber, "列名は {列名1|列名2} の形式で記述してください");
                 }
                 section = parseHeader(filePath, lineNumber, tableName, line.substring(1, line.length() - 1));
                 sections.add(section);
             } else {
                 if (section == null) {
-                    throw formatError(filePath, lineNumber, "データの前に {列名1;列名2} を記述してください");
+                    throw formatError(filePath, lineNumber, "データの前に {列名1|列名2} を記述してください");
                 }
                 Row row = parseRow(filePath, lineNumber, section, line);
                 foundPatterns.addAll(row.patterns);
@@ -469,6 +493,8 @@ public class DbJigu {
             }
         }
 
+        requireHeader(filePath, tableName, tableLineNumber, section);
+
         // パターン番号の指定間違いで、何も検証せずに成功するのを防ぐ
         Set<Integer> missing = new LinkedHashSet<>(targetPatterns);
         missing.removeAll(foundPatterns);
@@ -476,6 +502,13 @@ public class DbJigu {
             throw new IllegalArgumentException("パターン番号 " + missing + " の行がありません: " + filePath);
         }
         return sections;
+    }
+
+    // 列名の無いテーブルを、何も処理せずに見過ごさないようにする
+    private static void requireHeader(String filePath, String tableName, int tableLineNumber, Section section) {
+        if (tableName != null && section == null) {
+            throw formatError(filePath, tableLineNumber, "[" + tableName + "] の後に {列名1|列名2} を記述してください");
+        }
     }
 
     private static Section parseHeader(String filePath, int lineNumber, String tableName, String header) {
@@ -532,7 +565,11 @@ public class DbJigu {
     }
 
     private static IllegalArgumentException formatError(String filePath, int lineNumber, String message) {
-        return new IllegalArgumentException(filePath + ":" + lineNumber + " " + message);
+        return new IllegalArgumentException(location(filePath, lineNumber) + " " + message);
+    }
+
+    private static String location(String filePath, int lineNumber) {
+        return filePath + ":" + lineNumber;
     }
 
     private record Section(String tableName, List<Column> columns, boolean hasPattern, int headerLineNumber,

@@ -6,6 +6,8 @@ CREATE TABLE TestTable (
     date_column      DATE,
     timestamp_column TIMESTAMP,
     boolean_column   BOOLEAN,
+    real_column      REAL,
+    double_column    DOUBLE PRECISION,
     clob_column      TEXT
 );
 
