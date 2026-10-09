@@ -41,6 +41,30 @@ DbJigu never commits, rolls back, or closes the connection you pass in.
 - If you pass pattern numbers, only rows in those patterns and the common rows are processed. If you pass none, every row is processed. Passing a pattern number that no row uses is an error.
 - LOB columns (such as Oracle CLOB) are compared in Java rather than in SQL.
 
+### Comparison conditions
+
+When verifying, a mark at the end of a column name changes how that column is compared. Each column can have only one mark. Importing ignores the marks and inserts the values as written.
+
+| Mark | Condition (the DB value is on the left) |
+|---|---|
+| none | DB value = file value |
+| `@` | not compared |
+| `<` `<=` `>` `>=` | DB value < file value, and so on |
+| `!=` | DB value ≠ file value. Rows where the DB value is NULL also count as not equal. |
+| `%` | DB value starts with the file value (prefix match). String columns only. |
+
+```
+[Orders]
+{order_no|amount>=|amount<|status!=|note%|updated_at@}
+A001|100|200|CANCELED|Express|-
+```
+
+- `<null>` always means `IS NULL`, whatever the mark. With `!=` it means `IS NOT NULL`.
+- When verifying, the same column can appear twice, which lets you specify a range as shown above. Importing a header with a repeated column is an error.
+- In a `%` value, `%` and `_` are matched literally.
+- How strings sort depends on the database's collation, so use `<`, `>`, and the other ordering marks mainly for numbers and dates.
+- LOB columns can't use `<`, `<=`, `>`, or `>=`.
+
 ## Development
 
 Tests run against PostgreSQL. See [CLAUDE.md](CLAUDE.md) for the database setup.
