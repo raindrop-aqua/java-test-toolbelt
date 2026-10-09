@@ -48,3 +48,5 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 ## Conventions
 
 Code comments, Javadoc, console messages, exception messages, and test method names are written in Japanese. The README has an English version (`README.md`) and a Japanese version (`README.ja.md`). Keep the two in sync.
+
+Issues and PRs are written in Japanese. Follow the templates in `.github/` (`ISSUE_TEMPLATE/feature_request.md`, `ISSUE_TEMPLATE/bug_report.md`, `pull_request_template.md`), and fill in the PR checklist.
