@@ -13,7 +13,8 @@ Because of how it is distributed, `DbJigu.java` must:
 - keep working on several databases. The main target is PostgreSQL, and Oracle should keep working too, because it has been used there. Avoid DB-specific SQL.
 - never commit, roll back, or close the `Connection` it is given. In Spring tests, callers pass `DataSourceUtils.getConnection(dataSource)` so the test transaction can roll back.
 - throw on errors instead of swallowing them, so that a mistake can never pass silently.
-- record its version in the class Javadoc (`v2.1.1`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
+- record its version in the class Javadoc (`v2.1.2`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
+- keep the MIT license notice in the comment above `package`. Users copy only this file, so the notice has to travel with it (`LICENSE` holds the full text).
 
 ## Commands
 
@@ -45,6 +46,7 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 - Tests connect to PostgreSQL 17, which runs in Apple Container (`container ls`, container name `postgresql17`, database/user/password `postgres`). Its port is not published to localhost, so the default URL uses the container IP `192.168.64.2`. Start it with `container start postgresql17` if it is stopped.
 - `DbJiguTest` creates the schema from `src/test/resources/schema/postgresql.sql` inside a transaction and rolls back after each test. PostgreSQL DDL is transactional, so nothing is left in the DB. Don't create tables permanently. The DB also holds an unrelated `test_user` table.
 - Fixture paths are relative to the repo root, which Gradle uses as the working directory.
+- GitHub Actions (`.github/workflows/build.yml`) runs `./gradlew build` on Java 17 against a `postgres:17` service, on every pull request and push to `main`, passing `-Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres`. The README's Development section explains the same setup for people; keep the two consistent.
 
 ## Spring example
 

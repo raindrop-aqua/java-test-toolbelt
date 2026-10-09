@@ -8,7 +8,10 @@ CREATE TABLE TestTable (
     boolean_column   BOOLEAN,
     real_column      REAL,
     double_column    DOUBLE PRECISION,
-    clob_column      TEXT
+    clob_column      TEXT,
+    integer_column   INTEGER,
+    time_column      TIME,
+    uuid_column      UUID
 );
 
 CREATE TABLE Member (

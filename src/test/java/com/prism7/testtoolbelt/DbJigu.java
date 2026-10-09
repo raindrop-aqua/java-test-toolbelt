@@ -1,3 +1,8 @@
+/*
+ * DbJigu https://github.com/raindrop-aqua/java-test-toolbelt
+ * Copyright (c) 2024 Masahiro Atsumi
+ * Released under the MIT License.
+ */
 package com.prism7.testtoolbelt;
 
 import java.io.IOException;
@@ -17,6 +22,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
@@ -33,7 +39,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.1.1
+ * DB治具（DbJigu） v2.1.2
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -52,7 +58,9 @@ import java.util.stream.Collectors;
  *   <li>1ファイルに複数の {@code [テーブル名]} を記述できる。</li>
  *   <li>値の前後の空白は取り除く。{@code <null>} は NULL を表す。</li>
  *   <li>値は列の型（DBから取得）に合わせて変換して渡す。日付は {@code 2024-04-01} / {@code 2024/04/01}、
- *       日時は {@code 2024-04-01 12:34:56[.123]} の形式で記述する。</li>
+ *       日時は {@code 2024-04-01 12:34:56[.123]}、時刻は {@code 12:34[:56]} の形式で記述する。
+ *       INTEGER や BIGINT などの整数型の列に小数を書くとエラーにする（DBで丸められて投入されるのを防ぐ）。
+ *       ただし NUMERIC(10) などの列（Oracle の NUMBER を含む）は JDBC では整数型と区別できないため、DBの丸めに従う。</li>
  *   <li>CLOB 等の LOB 列は SQL の {@code =} で比較できないため、それ以外の列で絞り込んだ後に Java 側で比較する。</li>
  * </ul>
  *
@@ -107,6 +115,13 @@ public class DbJigu {
             .optionalStart().appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
             .toFormatter()
             // 2024-02-30 などの存在しない日付を、月末に丸めずにエラーにする
+            .withResolverStyle(ResolverStyle.STRICT);
+
+    // 時の1桁と、秒の省略を許す。Time は秒未満を持てないため、秒未満は書けない
+    private static final DateTimeFormatter TIME_FORMAT = new DateTimeFormatterBuilder()
+            .appendPattern("H:mm")
+            .optionalStart().appendPattern(":ss")
+            .toFormatter()
             .withResolverStyle(ResolverStyle.STRICT);
 
     private final Connection connection;
@@ -378,9 +393,11 @@ public class DbJigu {
         }
         try {
             switch (type) {
+                // 小数を BigDecimal で渡すとDBが丸めて投入するため、整数に変換できなければエラーにする
+                case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT ->
+                        ps.setLong(index, new BigDecimal(value).longValueExact());
                 // Oracle の FLOAT 型は内部が NUMBER のため、精度を落とさないよう BigDecimal で渡す
-                case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT,
-                     Types.NUMERIC, Types.DECIMAL, Types.FLOAT ->
+                case Types.NUMERIC, Types.DECIMAL, Types.FLOAT ->
                         ps.setBigDecimal(index, new BigDecimal(value));
                 // 浮動小数点の列を numeric で比較すると、誤差で一致しなくなるため列と同じ精度で渡す
                 case Types.REAL -> ps.setFloat(index, (float) toFloatingPoint(value, true));
@@ -396,13 +413,13 @@ public class DbJigu {
                 }
                 case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE ->
                         ps.setTimestamp(index, Timestamp.valueOf(parseDateTime(value)));
-                case Types.TIME -> ps.setTime(index, Time.valueOf(value));
+                case Types.TIME -> ps.setTime(index, Time.valueOf(LocalTime.parse(value, TIME_FORMAT)));
                 case Types.BOOLEAN, Types.BIT -> ps.setBoolean(index, parseBoolean(value));
                 // PostgreSQL の uuid や json など。型の変換はDBに任せる
                 case Types.OTHER -> ps.setObject(index, value, Types.OTHER);
                 default -> ps.setString(index, value);
             }
-        } catch (IllegalArgumentException | DateTimeParseException e) {
+        } catch (IllegalArgumentException | ArithmeticException | DateTimeParseException e) {
             throw new IllegalArgumentException(
                     location(filePath, row.lineNumber) + " 値を列の型に変換できません: " + value, e);
         }
@@ -457,14 +474,14 @@ public class DbJigu {
         for (int n = 0; n < lines.size(); n++) {
             int lineNumber = n + 1;
             String line = lines.get(n).trim();
-            if (lineNumber == 1 && line.startsWith("﻿")) {
+            if (lineNumber == 1 && line.startsWith("\uFEFF")) {
                 line = line.substring(1).trim();
             }
             if (line.isEmpty()) {
                 continue;
             }
             if (line.startsWith("[")) {
-                if (!line.endsWith("]") || line.length() == 2) {
+                if (!line.endsWith("]") || line.substring(1, line.length() - 1).isBlank()) {
                     throw formatError(filePath, lineNumber, "テーブル名は [テーブル名] の形式で記述してください");
                 }
                 requireHeader(filePath, tableName, tableLineNumber, section);

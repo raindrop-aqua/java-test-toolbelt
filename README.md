@@ -70,7 +70,7 @@ For a working example, see [DbJiguSpringExampleTest](src/test/java/com/prism7/te
 | `<null>` | NULL. |
 
 - Files are UTF-8, the separator is `|`, and every field is trimmed.
-- Values are converted to each column's type. Dates are written as `2024-04-01` or `2024/04/01`, and timestamps as `2024-04-01 12:34:56[.fff]`.
+- Values are converted to each column's type. Dates are written as `2024-04-01` or `2024/04/01`, timestamps as `2024-04-01 12:34:56[.fff]`, and times as `12:34[:56]`. A decimal in an integer-type column such as `INTEGER` or `BIGINT` is an error (for `NUMERIC(10)` or Oracle `NUMBER` columns, the database rounds it).
 - If you pass pattern numbers, only rows in those patterns and the common rows are processed. If you pass none, every row is processed. Passing a pattern number that no row uses is an error.
 - LOB columns (such as Oracle CLOB) are compared in Java rather than in SQL.
 
@@ -100,8 +100,24 @@ A001|100|200|CANCELED|Express|-
 
 ## Development
 
-Tests run against PostgreSQL. See [CLAUDE.md](CLAUDE.md) for the database setup.
+Tests connect to PostgreSQL 17. Tables are created inside the test transaction and rolled back at the end, so nothing is left in the database.
 
-```bash
-./gradlew build
-```
+1. Prepare PostgreSQL 17. The database, user, and password are all `postgres`. With Docker, you can start one like this:
+
+   ```bash
+   docker run -d --name dbjigu-postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:17
+   ```
+
+2. Run the tests. The default URL is `jdbc:postgresql://192.168.64.2:5432/postgres` (the maintainer's environment), so pass your own with `-P`:
+
+   ```bash
+   ./gradlew build -Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres
+   ```
+
+   You can also change the user and password with `-Pdbjigu.user=...` and `-Pdbjigu.password=...`. To run only some tests, use `--tests` (for example `./gradlew test --tests '*OrderServiceTest*'`).
+
+GitHub Actions runs the same tests on every pull request and every push to `main` ([.github/workflows/build.yml](.github/workflows/build.yml)).
+
+## License
+
+[MIT License](LICENSE). If you copy `DbJigu.java`, keep the copyright notice at the top of the file.
