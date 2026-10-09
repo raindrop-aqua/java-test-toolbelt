@@ -19,6 +19,37 @@ int mismatches = jigu.verifyExists("src/test/resources/data/expected.txt"); // �
 
 DbJigu は、渡された Connection のコミット、ロールバック、クローズを行いません。
 
+### Spring（Spring Boot + Spring Data JPA）での使い方
+
+```java
+@SpringBootTest
+@Transactional
+class MemberServiceTest {
+    @Autowired DataSource dataSource;
+    @PersistenceContext EntityManager entityManager;
+    DbJigu jigu;
+
+    @BeforeEach
+    void setUp() {
+        // テストのトランザクションに参加している Connection を渡す（投入したデータもロールバックされる）
+        jigu = new DbJigu(DataSourceUtils.getConnection(dataSource));
+        jigu.importFrom("src/test/resources/data/setup.txt");
+    }
+
+    @Test
+    void test() {
+        // ... テスト対象の処理を実行 ...
+        entityManager.flush();   // JPA の変更は flush するまで DB に書かれない
+        jigu.assertExists("src/test/resources/data/expected.txt");
+    }
+}
+```
+
+- `dataSource.getConnection()` は使わないでください。別の Connection になるため、投入したデータがコミットされ、ロールバックされません。
+- `flush()` を呼ばないと、JPA の変更がまだ DB に書かれていないため、検証で見つかりません。
+
+実際に動く例は [DbJiguSpringExampleTest](src/test/java/com/prism7/testtoolbelt/spring/DbJiguSpringExampleTest.java) を参照してください。
+
 ## フィクスチャの書式
 
 ```

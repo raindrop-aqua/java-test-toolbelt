@@ -19,6 +19,37 @@ int mismatches = jigu.verifyExists("src/test/resources/data/expected.txt"); // r
 
 DbJigu never commits, rolls back, or closes the connection you pass in.
 
+### With Spring (Spring Boot + Spring Data JPA)
+
+```java
+@SpringBootTest
+@Transactional
+class MemberServiceTest {
+    @Autowired DataSource dataSource;
+    @PersistenceContext EntityManager entityManager;
+    DbJigu jigu;
+
+    @BeforeEach
+    void setUp() {
+        // Pass the connection that takes part in the test transaction, so imported data is rolled back too
+        jigu = new DbJigu(DataSourceUtils.getConnection(dataSource));
+        jigu.importFrom("src/test/resources/data/setup.txt");
+    }
+
+    @Test
+    void test() {
+        // ... run the code under test ...
+        entityManager.flush();   // JPA changes reach the database only when flushed
+        jigu.assertExists("src/test/resources/data/expected.txt");
+    }
+}
+```
+
+- Don't use `dataSource.getConnection()`. It returns a separate connection, so imported data is committed and never rolled back.
+- Without `flush()`, JPA changes aren't in the database yet, and verification won't find them.
+
+For a working example, see [DbJiguSpringExampleTest](src/test/java/com/prism7/testtoolbelt/spring/DbJiguSpringExampleTest.java).
+
 ## Fixture format
 
 ```
