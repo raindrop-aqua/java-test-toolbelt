@@ -1,26 +1,37 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.2.4'
-    id 'io.spring.dependency-management' version '1.1.4'
 }
 
 group = 'com.prism7'
-version = '0.0.1-SNAPSHOT'
-
-java {
-    sourceCompatibility = '17'
-}
+version = '1.0.0'
 
 repositories {
     mavenCentral()
 }
 
+// 利用先が Java 17 のため、17 にない API を使うとコンパイルエラーにする
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.xerial:sqlite-jdbc:3.45.2.0'
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.postgresql:postgresql:42.7.14'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    // 接続先は -Pdbjigu.url=... などで上書きできる
+    ['dbjigu.url', 'dbjigu.user', 'dbjigu.password'].each { key ->
+        if (project.hasProperty(key)) {
+            systemProperty key, project.property(key)
+        }
+    }
+    testLogging {
+        events 'failed'
+        exceptionFormat = 'full'
+    }
 }
