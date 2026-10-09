@@ -1,0 +1,1574 @@
+<!doctype html>
+<!--
+  DbJigu フィクスチャエディタ https://github.com/raindrop-aqua/java-test-toolbelt
+  Copyright (c) 2024 Masahiro Atsumi
+  Released under the MIT License.
+
+  DbJigu のフィクスチャ（.txt）を表の形で編集するツール。このファイルをブラウザで開くだけで使える。
+  外部への通信は行わず、ファイルはブラウザの中だけで読み書きする。
+-->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DbJigu フィクスチャエディタ</title>
+<style>
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --border: #d9d9d4;
+  --accent: #2f6fde;
+  --accent-soft: #e6eefc;
+  --error: #c62828;
+  --error-soft: #fdecec;
+  --warn: #a15c00;
+  --warn-soft: #fff4e0;
+  --info: #4b5563;
+  --ok: #1b7f3b;
+  --null: #7c4dbe;
+  --comment: #6b7a3a;
+  --input-bg: #ffffff;
+  --row-hover: #f2f5fa;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "BIZ UDGothic", "MS Gothic", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a;
+    --panel: #202225;
+    --text: #e6e6e3;
+    --muted: #9aa0a6;
+    --border: #3a3d42;
+    --accent: #7aa7ff;
+    --accent-soft: #23314d;
+    --error: #ff8a80;
+    --error-soft: #3d2222;
+    --warn: #ffc266;
+    --warn-soft: #3a2f1c;
+    --info: #b0b6bd;
+    --ok: #6fd28f;
+    --null: #c3a6ff;
+    --comment: #b5c27a;
+    --input-bg: #1a1b1e;
+    --row-hover: #262a31;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a;
+  --panel: #202225;
+  --text: #e6e6e3;
+  --muted: #9aa0a6;
+  --border: #3a3d42;
+  --accent: #7aa7ff;
+  --accent-soft: #23314d;
+  --error: #ff8a80;
+  --error-soft: #3d2222;
+  --warn: #ffc266;
+  --warn-soft: #3a2f1c;
+  --info: #b0b6bd;
+  --ok: #6fd28f;
+  --null: #c3a6ff;
+  --comment: #b5c27a;
+  --input-bg: #1a1b1e;
+  --row-hover: #262a31;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+button.icon { padding: 0 6px; line-height: 20px; font-size: 12px; }
+select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+
+.bar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.bar h1 { font-size: 15px; margin: 0 8px 0 0; white-space: nowrap; }
+.bar .group { display: flex; align-items: center; gap: 4px; }
+.bar .sep { width: 1px; height: 22px; background: var(--border); }
+.file { font-family: var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.file.dirty::after { content: " ●"; color: var(--accent); }
+.status { margin-left: auto; font-size: 13px; white-space: nowrap; }
+.status .ok { color: var(--ok); }
+.status .e { color: var(--error); }
+.status .w { color: var(--warn); }
+label.check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.sec { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; padding: 10px 12px; }
+.sec.has-error { border-color: var(--error); }
+.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.sec-head .br { font-family: var(--mono); color: var(--muted); }
+.tname { font-family: var(--mono); font-weight: 600; border: 1px solid transparent; background: transparent; padding: 2px 4px; border-radius: 4px; min-width: 8ch; }
+.tname:hover, .tname:focus { border-color: var(--border); background: var(--input-bg); outline: none; }
+.ln { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sec-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+textarea.comments {
+  display: block; width: 100%; resize: vertical; margin-bottom: 6px;
+  font-family: var(--mono); font-size: 13px; color: var(--comment);
+  background: var(--input-bg); border: 1px dashed var(--border); border-radius: 4px; padding: 3px 6px;
+}
+
+.grid-wrap { overflow-x: auto; }
+table.grid { border-collapse: collapse; margin-top: 26px; font-family: var(--mono); font-size: 13px; }
+table.grid th, table.grid td { border: 1px solid var(--border); padding: 0; vertical-align: middle; }
+table.grid th { background: var(--bg); font-weight: normal; text-align: left; }
+.colhead { display: flex; align-items: center; }
+.colhead input { flex: 1; min-width: 0; font-weight: 600; }
+.colhead select { border: 0; border-left: 1px solid var(--border); border-radius: 0; font-family: var(--mono); font-size: 12px; background: transparent; padding: 3px 2px; }
+.colhead select.marked { color: var(--accent); font-weight: 700; }
+.grid th.col { position: relative; }
+.coltools {
+  position: absolute; left: 50%; bottom: calc(100% - 2px); transform: translateX(-50%); z-index: 2;
+  display: none; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+}
+th.col:hover .coltools, th.col:focus-within .coltools { display: flex; }
+.coltools button { padding: 0 5px; font-size: 11px; line-height: 16px; border-radius: 4px; }
+th.pat { text-align: center; color: var(--accent); font-weight: 700; padding: 0 8px; }
+th.extra { color: var(--error); font-size: 11px; padding: 0 6px; }
+table.grid input {
+  width: 100%; border: 0; background: var(--input-bg); padding: 4px 6px; outline: none;
+  font-family: var(--mono); font-size: 13px;
+}
+table.grid input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+table.grid input::placeholder { color: var(--muted); opacity: .6; }
+input.null { color: var(--null); font-style: italic; }
+input.missing { background: var(--error-soft); }
+input.cell.pat { color: var(--accent); text-align: center; }
+input.ctext { color: var(--comment); }
+.rh { white-space: nowrap; padding: 0 4px !important; background: var(--bg); min-width: 44px; }
+.rh .ln { display: inline-block; min-width: 2.5em; text-align: right; }
+.rtools { display: none; gap: 2px; }
+tr.row:hover .rtools, tr.row:focus-within .rtools { display: inline-flex; }
+tr.row:hover .rh .ln, tr.row:focus-within .rh .ln { display: none; }
+.rtools button { padding: 0 4px; font-size: 11px; line-height: 16px; border-radius: 4px; }
+tr.row:hover td { background: var(--row-hover); }
+tr.dim { opacity: .3; }
+tr.blank td { height: 8px; }
+.add-row { margin-top: 6px; font-size: 12px; }
+
+.err-cell { box-shadow: inset 0 0 0 2px var(--error) !important; background: var(--error-soft) !important; }
+.warn-cell { box-shadow: inset 0 0 0 2px var(--warn) !important; background: var(--warn-soft) !important; }
+tr.err-row > td.rh { background: var(--error-soft); border-left: 3px solid var(--error); }
+tr.warn-row > td.rh { background: var(--warn-soft); border-left: 3px solid var(--warn); }
+
+#textView { display: none; }
+#text {
+  width: 100%; min-height: 70vh; resize: vertical; tab-size: 4;
+  font-family: var(--mono); font-size: 13px; line-height: 1.6;
+  background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+}
+.text-tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+
+aside { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 80px); overflow: auto; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.card h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+.issues { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.issues li { padding: 4px 6px; border-radius: 4px; cursor: pointer; display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; }
+.issues li:hover { background: var(--row-hover); }
+.issues .lv { font-size: 11px; font-weight: 700; padding: 0 4px; border-radius: 3px; align-self: start; margin-top: 2px; }
+.issues .lv.error { color: var(--error); background: var(--error-soft); }
+.issues .lv.warn { color: var(--warn); background: var(--warn-soft); }
+.issues .lv.info { color: var(--info); background: var(--bg); }
+.issues .where { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.issues .fix { grid-column: 2; justify-self: start; font-size: 11px; padding: 0 6px; }
+.empty { color: var(--muted); font-size: 13px; }
+table.matrix { border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+table.matrix th, table.matrix td { border: 1px solid var(--border); padding: 2px 6px; text-align: center; }
+table.matrix th:first-child, table.matrix td:first-child { text-align: left; }
+table.matrix .on { background: var(--accent-soft); }
+table.matrix .zero { color: var(--error); }
+details.help { font-size: 13px; }
+details.help summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+details.help code, details.help kbd { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 0 3px; }
+details.help ul { padding-left: 18px; margin: 6px 0; }
+.add-sec { width: 100%; padding: 8px; border-style: dashed; color: var(--muted); }
+.trailing-label { font-size: 12px; color: var(--muted); margin: 4px 0; }
+
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 6px;
+  font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20;
+}
+#toast.show { opacity: .92; }
+#dropHint {
+  position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 15%, transparent); border: 3px dashed var(--accent);
+  font-size: 20px; color: var(--accent); z-index: 30; pointer-events: none;
+}
+body.dragging #dropHint { display: flex; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>DbJigu フィクスチャエディタ</h1>
+  <div class="group">
+    <button id="btnNew" title="新規">新規</button>
+    <button id="btnOpen" title="開く（Ctrl/⌘+O）">開く</button>
+    <button id="btnSave" title="保存（Ctrl/⌘+S）">保存</button>
+    <button id="btnSaveAs">名前を付けて保存</button>
+  </div>
+  <span id="fileName" class="file"></span>
+  <span class="sep"></span>
+  <div class="group">
+    <button id="btnUndo" class="icon" title="元に戻す">↶</button>
+    <button id="btnRedo" class="icon" title="やり直す">↷</button>
+  </div>
+  <div class="group">
+    <button id="btnGrid" aria-pressed="true">表</button>
+    <button id="btnText" aria-pressed="false">テキスト</button>
+  </div>
+  <label class="check" title="保存するときに | の位置を縦に揃える（値の前後の空白は DbJigu が取り除くので、意味は変わらない）">
+    <input type="checkbox" id="chkAlign"> 桁揃え
+  </label>
+  <label class="check">パターン
+    <select id="selFilter"></select>
+  </label>
+  <span id="status" class="status"></span>
+  <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+</header>
+
+<div class="layout">
+  <main>
+    <div id="gridView"></div>
+    <div id="textView">
+      <div class="text-tools">
+        <button id="btnFormat">整形</button>
+        <span>テキストを直接編集できます。「表」に戻ると内容を読み込み直します。</span>
+      </div>
+      <textarea id="text" spellcheck="false" wrap="off"></textarea>
+    </div>
+  </main>
+  <aside>
+    <div class="card">
+      <h2>チェック結果</h2>
+      <ul id="issues" class="issues"></ul>
+    </div>
+    <div class="card">
+      <h2>パターン</h2>
+      <div id="patterns"></div>
+    </div>
+    <div class="card">
+      <details class="help">
+        <summary>書式と操作</summary>
+        <ul>
+          <li><code>[テーブル]</code> の次の行に <code>{列1|列2}</code>、その後に値の行。</li>
+          <li><code>&lt;null&gt;</code> は NULL。何も書かなければ空文字。</li>
+          <li>列名の記号（検証のとき）：<code>@</code> 比較しない、<code>&lt; &lt;= &gt; &gt;=</code> 大小、<code>!=</code> 等しくない、<code>%</code> 前方一致。投入では無視される。</li>
+          <li>「パターン列」を有効にすると、各行の先頭がパターン番号（<code>1,2</code>）になる。空なら全パターン共通。</li>
+          <li><code>//</code> で始まる行はコメント。</li>
+        </ul>
+        <ul>
+          <li><kbd>Enter</kbd> / <kbd>↓</kbd> 下の行へ（最後の行では行を追加）、<kbd>Shift+Enter</kbd> / <kbd>↑</kbd> 上の行へ</li>
+          <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
+          <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
+          <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
+          <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
+        </ul>
+      </details>
+    </div>
+  </aside>
+</div>
+<div id="toast"></div>
+<div id="dropHint">ここにドロップして開く</div>
+
+<script id="core">
+// フィクスチャの解析・書き出し・チェック。DOM に依存しない（DbJigu.java の readFile と同じ規則で読む）
+const FixtureCore = (() => {
+  'use strict';
+
+  const NULL_VALUE = '<null>';
+  // DbJigu.Operator と同じく、2文字の記号を先に判定する
+  const MARKS = ['<=', '>=', '!=', '<', '>', '%', '@'];
+  const MARK_CHARS = '@<>=!%';
+  const INT_MAX = 2147483647;
+
+  // Java の String.trim() と同じく、U+0020 以下の文字だけを取り除く（全角空白は残る）
+  function jtrim(s) {
+    return s.replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, '');
+  }
+
+  // 区切り文字で分割し、各項目の前後の空白を除く（末尾の空の項目も残す）
+  function splitFields(line) {
+    return line.split('|').map(jtrim);
+  }
+
+  function splitMark(raw) {
+    const t = jtrim(raw);
+    for (const m of MARKS) {
+      if (t.endsWith(m)) {
+        return { name: jtrim(t.slice(0, t.length - m.length)), mark: m };
+      }
+    }
+    return { name: t, mark: '' };
+  }
+
+  function trimBlank(lines) {
+    const a = lines.slice();
+    while (a.length && a[0] === '') a.shift();
+    while (a.length && a[a.length - 1] === '') a.pop();
+    return a;
+  }
+
+  function newSection(name, comments) {
+    return { name, comments, headerComments: [], columns: null, hasPattern: false, rows: [], line: 0, headerLine: 0 };
+  }
+
+  // テキストを読み込む。DbJigu が例外にする構造の誤りは fatal に入れ、doc は null にする
+  function parse(text) {
+    const eol = /\r\n/.test(text) ? '\r\n' : '\n';
+    const lines = text.split(/\r\n|\n|\r/);
+    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    const doc = { eol, sections: [], trailing: [] };
+    const fatal = [];
+    let cur = null;
+    // 空行と、空行の後のコメント。どこに属するかは、次に来る行で決める
+    let buffer = [];
+    // テーブル名の行に誤りがあるときは、その誤りだけを報告する
+    const requireHeader = () => {
+      if (cur && !cur.columns && !cur.badName) {
+        fatal.push({ line: cur.line, msg: `[${cur.name}] の後に {列名1|列名2} を記述してください` });
+      }
+    };
+
+    lines.forEach((raw, i) => {
+      const lineNo = i + 1;
+      let t = jtrim(raw);
+      if (i === 0 && t.startsWith('﻿')) t = jtrim(t.slice(1));
+      if (t === '') {
+        buffer.push('');
+        return;
+      }
+      if (t.startsWith('//')) {
+        // データの行の直後のコメントは、コメントにした行としてそのテーブルに含める
+        if (cur && cur.columns && buffer.length === 0) cur.rows.push({ kind: 'comment', text: t, line: lineNo });
+        else buffer.push(t);
+        return;
+      }
+      if (t.startsWith('[')) {
+        // 誤りがあっても読み進め、後の行で連鎖したエラーを出さないようにする
+        const name = jtrim(t.endsWith(']') ? t.slice(1, -1) : t.slice(1));
+        const badName = !t.endsWith(']') || name === '';
+        if (badName) fatal.push({ line: lineNo, msg: 'テーブル名は [テーブル名] の形式で記述してください' });
+        requireHeader();
+        cur = newSection(name, trimBlank(buffer));
+        cur.line = lineNo;
+        cur.badName = badName;
+        buffer = [];
+        doc.sections.push(cur);
+        return;
+      }
+      if (t.startsWith('{')) {
+        if (!cur) {
+          fatal.push({ line: lineNo, msg: '列名の前に [テーブル名] を記述してください' });
+          return;
+        }
+        if (!t.endsWith('}')) {
+          fatal.push({ line: lineNo, msg: '列名は {列名1|列名2} の形式で記述してください' });
+        }
+        if (cur.columns) {
+          // 同じテーブルに列名の行が2つあると、DbJigu は別のテーブルとして扱う
+          cur = newSection(cur.name, trimBlank(buffer));
+          cur.line = lineNo;
+          doc.sections.push(cur);
+        } else {
+          cur.headerComments = trimBlank(buffer);
+        }
+        buffer = [];
+        let names = splitFields(t.endsWith('}') ? t.slice(1, -1) : t.slice(1));
+        cur.hasPattern = names[0] === '#';
+        if (cur.hasPattern) names = names.slice(1);
+        cur.columns = names.map(splitMark);
+        cur.headerLine = lineNo;
+        return;
+      }
+      if (!cur || !cur.columns) {
+        fatal.push({ line: lineNo, msg: 'データの前に {列名1|列名2} を記述してください' });
+        return;
+      }
+      for (const b of buffer) cur.rows.push(b === '' ? { kind: 'blank' } : { kind: 'comment', text: b });
+      buffer = [];
+      const fields = splitFields(t);
+      const row = { kind: 'data', pattern: '', cells: fields, line: lineNo };
+      if (cur.hasPattern) {
+        row.pattern = fields[0];
+        row.cells = fields.slice(1);
+      }
+      cur.rows.push(row);
+    });
+    requireHeader();
+    doc.trailing = trimBlank(buffer);
+    for (const s of doc.sections) delete s.badName;
+    return fatal.length ? { doc: null, fatal } : { doc, fatal };
+  }
+
+  function fieldsOf(section, row) {
+    return section.hasPattern ? [row.pattern, ...row.cells] : row.cells.slice();
+  }
+
+  function headerFields(section) {
+    return (section.hasPattern ? ['#'] : []).concat(section.columns.map(c => c.name + c.mark));
+  }
+
+  // 項目の位置（パターン番号の列があれば 0 がパターン番号）に値を設定する
+  function setField(section, row, f, value) {
+    if (section.hasPattern && f === 0) {
+      row.pattern = value;
+      return;
+    }
+    const i = f - (section.hasPattern ? 1 : 0);
+    while (row.cells.length < i) row.cells.push('');
+    row.cells[i] = value;
+  }
+
+  // 等幅フォントでの表示幅（全角は2）
+  function charWidth(cp) {
+    if ((cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0xA4CF && cp !== 0x303F)
+        || (cp >= 0xAC00 && cp <= 0xD7A3) || (cp >= 0xF900 && cp <= 0xFAFF)
+        || (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60)
+        || (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x1F300 && cp <= 0x1FAFF)
+        || (cp >= 0x20000 && cp <= 0x3FFFD)) {
+      return 2;
+    }
+    if (cp < 0x20 || (cp >= 0x300 && cp <= 0x36F) || cp === 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F)) return 0;
+    return 1;
+  }
+
+  function displayWidth(s) {
+    let w = 0;
+    for (const ch of s) w += charWidth(ch.codePointAt(0));
+    return w;
+  }
+
+  function joinFields(fields, widths) {
+    return fields.map((v, j) => {
+      if (!widths || j === fields.length - 1) return v;
+      return v + ' '.repeat(Math.max(0, widths[j] - displayWidth(v)));
+    }).join('|');
+  }
+
+  // テキストに書き出す。各要素の line に、書き出した行番号を設定する
+  function serialize(doc, opts = {}) {
+    const out = [];
+    const push = s => {
+      out.push(s);
+      return out.length;
+    };
+    doc.sections.forEach((s, i) => {
+      if (i > 0) push('');
+      s.comments.forEach(c => push(c));
+      s.line = push('[' + s.name + ']');
+      s.headerComments.forEach(c => push(c));
+      const header = headerFields(s);
+      let widths = null;
+      if (opts.align) {
+        widths = [];
+        for (const fields of [header, ...s.rows.filter(r => r.kind === 'data').map(r => fieldsOf(s, r))]) {
+          fields.forEach((v, j) => {
+            widths[j] = Math.max(widths[j] || 0, displayWidth(v));
+          });
+        }
+      }
+      s.headerLine = push('{' + joinFields(header, widths) + '}');
+      for (const r of s.rows) {
+        if (r.kind === 'blank') r.line = push('');
+        else if (r.kind === 'comment') r.line = push(r.text);
+        else r.line = push((widths ? ' ' : '') + joinFields(fieldsOf(s, r), widths));
+      }
+    });
+    if (doc.trailing.length) {
+      if (out.length) push('');
+      doc.trailing.forEach(c => push(c));
+    }
+    return out.length ? out.join(doc.eol) + doc.eol : '';
+  }
+
+  // 行のパターン番号（数値でないものは除く）
+  function patternsOf(row) {
+    if (!row.pattern) return [];
+    return row.pattern.split(',').map(jtrim).filter(p => /^[+-]?\d+$/.test(p)).map(Number);
+  }
+
+  function allPatterns(doc) {
+    const set = new Set();
+    for (const s of doc.sections) {
+      if (!s.hasPattern) continue;
+      for (const r of s.rows) if (r.kind === 'data') patternsOf(r).forEach(p => set.add(p));
+    }
+    return [...set].sort((a, b) => a - b);
+  }
+
+  function inPattern(section, row, pattern) {
+    return pattern == null || !section.hasPattern || row.pattern === '' || patternsOf(row).includes(pattern);
+  }
+
+  // DbJigu が実行時に例外にするもの（error）と、意図と違う結果になりやすいもの（warn / info）を挙げる。
+  // 位置は s（テーブル）、r（'name' / 'h' / 行の位置）、f（項目の位置）で表す
+  function lint(doc) {
+    const issues = [];
+    const add = (level, s, r, f, msg, fix) => issues.push({ level, s, r, f, msg, fix });
+    let dataTotal = 0;
+
+    doc.sections.forEach((s, si) => {
+      if (jtrim(s.name) === '') add('error', si, 'name', null, 'テーブル名が空です');
+      else if (/[|{}\[]/.test(s.name)) add('error', si, 'name', null, 'テーブル名に使えない文字があります: ' + s.name);
+
+      const off = s.hasPattern ? 1 : 0;
+      if (s.columns.length === 0) add('error', si, 'h', null, '列名がありません');
+      const seen = new Set();
+      s.columns.forEach((c, ci) => {
+        const f = ci + off;
+        const raw = c.name + c.mark;
+        if (c.name === '') add('error', si, 'h', f, '空の列名があります');
+        else if (/[|{}\r\n]/.test(c.name)) add('error', si, 'h', f, '列名に使えない文字があります: ' + c.name);
+        else if (MARK_CHARS.includes(c.name[c.name.length - 1])) add('error', si, 'h', f, '列名の末尾の記号は1つだけ付けられます: ' + raw);
+        else if (c.name === '#') add('error', si, 'h', f, '# は列名に使えません（パターン番号の列は「パターン列」で切り替えます）');
+        else if (c.name !== jtrim(c.name)) add('warn', si, 'h', f, '列名の前後の空白は取り除かれます');
+        const key = c.name.toLowerCase();
+        if (c.name !== '' && seen.has(key)) {
+          add('info', si, 'h', f, `列 ${c.name} が2回あります。検証の範囲指定には使えますが、投入に使うとエラーになります`);
+        }
+        seen.add(key);
+      });
+
+      let dataCount = 0;
+      s.rows.forEach((r, ri) => {
+        if (r.kind === 'comment') {
+          if (!jtrim(r.text).startsWith('//')) add('error', si, ri, null, 'コメントの行は // で始めてください');
+          return;
+        }
+        if (r.kind !== 'data') return;
+        dataCount++;
+        if (r.cells.length !== s.columns.length) {
+          add('error', si, ri, null, `列数(${s.columns.length})と値の数(${r.cells.length})が一致しません`,
+              r.cells.length < s.columns.length || r.cells.slice(s.columns.length).every(v => v === '') ? 'fit' : null);
+        }
+        if (s.hasPattern && r.pattern !== '') {
+          const bad = r.pattern.split(',').map(jtrim)
+              .some(p => !/^[+-]?\d+$/.test(p) || Math.abs(Number(p)) > INT_MAX);
+          if (bad) add('error', si, ri, 0, 'パターン番号が数値ではありません: ' + r.pattern);
+        }
+        const fields = fieldsOf(s, r);
+        fields.forEach((v, f) => {
+          if (v.includes('|')) add('error', si, ri, f, '値に | は書けません（区切り文字のため）');
+          else if (/[\r\n]/.test(v)) add('error', si, ri, f, '値に改行は書けません');
+          else if (v !== jtrim(v)) add('warn', si, ri, f, '値の前後の空白は取り除かれます');
+        });
+        const first = jtrim(fields[0] ?? '');
+        if (fields.length === 1 && first === '') {
+          add('error', si, ri, 0, '空の値だけの行は、空行として無視されます');
+        } else if (first.startsWith('[') || first.startsWith('{') || first.startsWith('//')) {
+          add('error', si, ri, 0, '行の先頭が [ { // になる値は書けません（テーブル名・列名・コメントの行として読まれます）');
+        }
+      });
+      if (dataCount === 0) add('info', si, 'h', null, 'データの行がありません');
+      dataTotal += dataCount;
+    });
+
+    if (doc.sections.length === 0) add('info', null, null, null, 'テーブルがありません');
+    else if (dataTotal === 0) add('warn', null, null, null, 'データの行が1行もありません（検証に使うとエラーになります）');
+    return issues;
+  }
+
+  // Excel などからコピーした、タブ区切りの表を読む（" で囲んだ値の中の改行やタブも扱う）
+  function parseTsv(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let i = 0;
+    let quoted = false;
+    while (i < text.length) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        if (c === '"') { quoted = false; i++; continue; }
+        field += c; i++; continue;
+      }
+      if (c === '"' && field === '') { quoted = true; i++; continue; }
+      if (c === '\t') { row.push(field); field = ''; i++; continue; }
+      if (c === '\r' || c === '\n') {
+        row.push(field); rows.push(row); row = []; field = '';
+        i += (c === '\r' && text[i + 1] === '\n') ? 2 : 1;
+        continue;
+      }
+      field += c; i++;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.map(r => r.map(jtrim));
+  }
+
+  function toTsv(section) {
+    const quote = v => /[\t\r\n"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    const lines = [headerFields(section)];
+    for (const r of section.rows) if (r.kind === 'data') lines.push(fieldsOf(section, r));
+    return lines.map(l => l.map(quote).join('\t')).join('\n') + '\n';
+  }
+
+  return {
+    NULL_VALUE, MARKS, jtrim, splitFields, splitMark, parse, serialize, lint, fieldsOf, headerFields,
+    setField, displayWidth, patternsOf, allPatterns, inPattern, parseTsv, toTsv,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = FixtureCore;
+</script>
+
+<script>
+(() => {
+  'use strict';
+  const C = FixtureCore;
+  const $ = id => document.getElementById(id);
+  const ALIGN_KEY = 'dbjigu-fixture-editor.align';
+
+  const state = {
+    doc: null,
+    fileName: 'fixture.txt',
+    handle: null,
+    dirty: false,
+    mode: 'grid',
+    align: true,
+    filter: null,
+    undo: [],
+    redo: [],
+    pendingSnap: null,
+    issues: [],
+  };
+
+  try {
+    const saved = localStorage.getItem(ALIGN_KEY);
+    if (saved != null) state.align = saved === '1';
+  } catch (e) { /* 保存できない環境では既定値を使う */ }
+
+  // ---------- モデルの操作 ----------
+
+  function newDoc() {
+    const s = { name: 'table_name', comments: [], headerComments: [], hasPattern: false, line: 0, headerLine: 0,
+      columns: [{ name: 'col1', mark: '' }, { name: 'col2', mark: '' }],
+      rows: [{ kind: 'data', pattern: '', cells: ['', ''] }] };
+    return { eol: '\n', sections: [s], trailing: [] };
+  }
+
+  function newSection() {
+    return { name: '', comments: [], headerComments: [], hasPattern: false, line: 0, headerLine: 0,
+      columns: [{ name: '', mark: '' }], rows: [{ kind: 'data', pattern: '', cells: [''] }] };
+  }
+
+  function newRow(s, pattern) {
+    return { kind: 'data', pattern: s.hasPattern ? (pattern ?? '') : '', cells: s.columns.map(() => '') };
+  }
+
+  const snapshot = () => JSON.stringify(state.doc);
+
+  function pushUndo(snap) {
+    if (state.undo[state.undo.length - 1] !== snap) state.undo.push(snap);
+    if (state.undo.length > 300) state.undo.shift();
+    state.redo = [];
+  }
+
+  // 構造を変える操作。元に戻せるよう、変更前の状態を記録してから再描画する
+  function mutate(fn, focus) {
+    if (!state.doc) return;
+    const before = snapshot();
+    if (fn() === false) return;
+    pushUndo(before);
+    setDirty();
+    render(focus);
+  }
+
+  function undo() {
+    if (state.mode !== 'grid' || !state.undo.length) return;
+    state.redo.push(snapshot());
+    state.doc = JSON.parse(state.undo.pop());
+    setDirty();
+    render();
+  }
+
+  function redo() {
+    if (state.mode !== 'grid' || !state.redo.length) return;
+    state.undo.push(snapshot());
+    state.doc = JSON.parse(state.redo.pop());
+    setDirty();
+    render();
+  }
+
+  function setDirty(v = true) {
+    state.dirty = v;
+    renderFileName();
+  }
+
+  function currentText() {
+    return state.mode === 'text' ? $('text').value : C.serialize(state.doc, { align: state.align });
+  }
+
+  function swap(arr, i, j) {
+    if (i < 0 || j < 0 || i >= arr.length || j >= arr.length) return false;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return true;
+  }
+
+  // ---------- 描画 ----------
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function render(focus) {
+    $('gridView').style.display = state.mode === 'grid' ? '' : 'none';
+    $('textView').style.display = state.mode === 'text' ? 'block' : 'none';
+    $('btnGrid').setAttribute('aria-pressed', state.mode === 'grid');
+    $('btnText').setAttribute('aria-pressed', state.mode === 'text');
+    $('chkAlign').checked = state.align;
+    $('btnUndo').disabled = state.mode !== 'grid' || !state.undo.length;
+    $('btnRedo').disabled = state.mode !== 'grid' || !state.redo.length;
+    renderFileName();
+    if (state.mode === 'grid') {
+      renderGrid();
+      if (focus) restoreFocus(focus);
+    }
+    runLint();
+  }
+
+  function renderFileName() {
+    const el = $('fileName');
+    el.textContent = state.fileName;
+    el.title = state.handle ? '上書き保存できます' : '保存するとダウンロードされます';
+    el.classList.toggle('dirty', state.dirty);
+  }
+
+  function colWidth(texts) {
+    const w = Math.max(4, ...texts.map(t => C.displayWidth(t || '')));
+    return Math.min(w, 48);
+  }
+
+  function renderGrid() {
+    const doc = state.doc;
+    C.serialize(doc, { align: state.align }); // 行番号を求める
+    const parts = doc.sections.map((s, si) => sectionHtml(s, si));
+    if (doc.trailing.length) {
+      parts.push(`<div class="trailing-label">ファイル末尾のコメント</div>
+        <textarea class="comments" data-kind="trailing" rows="${doc.trailing.length}" spellcheck="false">${esc(doc.trailing.join('\n'))}</textarea>`);
+    }
+    parts.push('<button class="add-sec" data-act="sec-add">＋ テーブルを追加</button>');
+    $('gridView').innerHTML = parts.join('');
+  }
+
+  function sectionHtml(s, si) {
+    const off = s.hasPattern ? 1 : 0;
+    const dataRows = s.rows.filter(r => r.kind === 'data');
+    const maxCells = Math.max(s.columns.length, ...dataRows.map(r => r.cells.length));
+    const span = maxCells + off;
+    let h = `<section class="sec" data-s="${si}">`;
+    if (s.comments.length) {
+      h += `<textarea class="comments" data-s="${si}" data-kind="comments" rows="${s.comments.length}" spellcheck="false">${esc(s.comments.join('\n'))}</textarea>`;
+    }
+    h += `<div class="sec-head">
+      <span class="ln">L${s.line}</span>
+      <span class="br">[</span><input class="tname" data-s="${si}" data-r="name" value="${esc(s.name)}" size="${Math.max(8, C.displayWidth(s.name) + 1)}" placeholder="テーブル名" spellcheck="false"><span class="br">]</span>
+      <div class="sec-tools">
+        <button data-act="sec-pattern" aria-pressed="${s.hasPattern}" title="各行の先頭をパターン番号にする">パターン列</button>
+        <button data-act="sec-addcol">＋列</button>
+        <button data-act="sec-addrow">＋行</button>
+        <button data-act="sec-comment" title="テーブルの前にコメントを書く">コメント</button>
+        <button data-act="sec-tsv" title="Excel に貼り付けられる形式でコピー">TSVコピー</button>
+        <button data-act="sec-dup" title="テーブルを複製">複製</button>
+        <button class="icon" data-act="sec-up" title="上へ">↑</button>
+        <button class="icon" data-act="sec-down" title="下へ">↓</button>
+        <button class="icon" data-act="sec-del" title="テーブルを削除">✕</button>
+      </div>
+    </div>`;
+    for (const c of s.headerComments) {
+      h += `<div class="ln" style="color:var(--comment)">${esc(c)}</div>`;
+    }
+    h += `<div class="grid-wrap"><table class="grid"><thead><tr><th class="rh"><span class="ln">L${s.headerLine}</span></th>`;
+    if (s.hasPattern) h += '<th class="pat" title="パターン番号">#</th>';
+    s.columns.forEach((c, ci) => {
+      const f = ci + off;
+      const w = colWidth([c.name + c.mark, ...dataRows.map(r => r.cells[ci])]);
+      const opts = [['', '='], ...C.MARKS.map(m => [m, m])]
+        .map(([v, label]) => `<option value="${esc(v)}"${v === c.mark ? ' selected' : ''}>${esc(label)}</option>`).join('');
+      h += `<th class="col" data-f="${f}" style="min-width:calc(${w + 4}ch + 20px)">
+        <div class="colhead">
+          <input class="cname" data-s="${si}" data-r="h" data-f="${f}" value="${esc(c.name)}" placeholder="列名" spellcheck="false">
+          <select class="mark${c.mark ? ' marked' : ''}" data-s="${si}" data-f="${f}" title="比較の条件（検証のとき）">${opts}</select>
+        </div>
+        <div class="coltools">
+          <button data-act="col-left" title="左へ">◀</button>
+          <button data-act="col-ins" title="右に列を追加">＋</button>
+          <button data-act="col-right" title="右へ">▶</button>
+          <button data-act="col-del" title="列を削除">✕</button>
+        </div>
+      </th>`;
+    });
+    for (let i = s.columns.length; i < maxCells; i++) h += '<th class="extra" title="列名より多い値">（余り）</th>';
+    h += '</tr></thead><tbody>';
+
+    s.rows.forEach((r, ri) => {
+      const tools = r.kind === 'blank'
+        ? '<button data-act="row-del" title="空行を削除">✕</button>'
+        : `<button data-act="row-up" title="上へ">↑</button><button data-act="row-down" title="下へ">↓</button>`
+          + (r.kind === 'data' ? '<button data-act="row-ins" title="下に行を追加">＋</button><button data-act="row-dup" title="複製">⧉</button>' : '')
+          + `<button data-act="row-toggle" title="${r.kind === 'data' ? 'コメントにする' : 'コメントを外す'}">//</button>`
+          + '<button data-act="row-del" title="削除">✕</button>';
+      const rh = `<td class="rh"><span class="ln">${r.line || ''}</span><span class="rtools">${tools}</span></td>`;
+      if (r.kind === 'blank') {
+        h += `<tr class="row blank" data-r="${ri}">${rh}<td colspan="${span}"></td></tr>`;
+      } else if (r.kind === 'comment') {
+        h += `<tr class="row comment" data-r="${ri}">${rh}<td colspan="${span}"><input class="ctext" data-s="${si}" data-r="${ri}" value="${esc(r.text)}" spellcheck="false"></td></tr>`;
+      } else {
+        const dim = state.filter != null && !C.inPattern(s, r, state.filter) ? ' dim' : '';
+        h += `<tr class="row${dim}" data-r="${ri}">${rh}`;
+        if (s.hasPattern) h += `<td style="min-width:7ch">${cellHtml(si, ri, 0, r.pattern, false, 'pat')}</td>`;
+        for (let i = 0; i < maxCells; i++) {
+          h += `<td>${cellHtml(si, ri, i + off, r.cells[i], i >= r.cells.length, '')}</td>`;
+        }
+        h += '</tr>';
+      }
+    });
+    h += `</tbody></table></div>
+      <button class="add-row" data-act="sec-addrow">＋ 行を追加</button></section>`;
+    return h;
+  }
+
+  function cellHtml(si, ri, f, value, missing, extraClass) {
+    const v = value ?? '';
+    const cls = ['cell', extraClass, v === C.NULL_VALUE ? 'null' : '', missing ? 'missing' : ''].filter(Boolean).join(' ');
+    const ph = missing ? '（値なし）' : (extraClass === 'pat' ? '共通' : '空文字');
+    return `<input class="${cls}" data-s="${si}" data-r="${ri}" data-f="${f}" value="${esc(v)}" placeholder="${ph}" spellcheck="false">`;
+  }
+
+  function findInput(focus) {
+    const g = $('gridView');
+    if (focus.r === 'name') return g.querySelector(`input.tname[data-s="${focus.s}"]`);
+    if (focus.r === 'h') return g.querySelector(`input.cname[data-s="${focus.s}"][data-f="${focus.f}"]`);
+    if (focus.kind === 'comments') return g.querySelector(`textarea[data-kind="comments"][data-s="${focus.s}"]`);
+    if (focus.f == null) return g.querySelector(`input[data-s="${focus.s}"][data-r="${focus.r}"]`);
+    return g.querySelector(`input.cell[data-s="${focus.s}"][data-r="${focus.r}"][data-f="${focus.f}"]`);
+  }
+
+  function restoreFocus(focus) {
+    const el = findInput(focus);
+    if (el) {
+      el.focus();
+      if (el.select && focus.select !== false) el.select();
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  // ---------- チェック ----------
+
+  let lintTimer = null;
+  function scheduleLint() {
+    clearTimeout(lintTimer);
+    lintTimer = setTimeout(runLint, 150);
+  }
+
+  function runLint() {
+    let issues;
+    let doc = state.doc;
+    if (state.mode === 'text') {
+      const parsed = C.parse($('text').value);
+      if (parsed.fatal.length) {
+        issues = parsed.fatal.map(e => ({ level: 'error', line: e.line, msg: e.msg }));
+        doc = null;
+      } else {
+        doc = parsed.doc;
+        issues = C.lint(doc);
+      }
+    } else {
+      C.serialize(doc, { align: state.align });
+      issues = C.lint(doc);
+    }
+    for (const i of issues) {
+      if (i.line != null || i.s == null) continue;
+      const s = doc.sections[i.s];
+      i.table = s.name;
+      i.line = i.r === 'name' ? s.line : i.r === 'h' ? s.headerLine : s.rows[i.r].line;
+    }
+    state.issues = issues;
+    renderIssues(issues);
+    renderPatterns(doc);
+    if (state.mode === 'grid') markCells(issues);
+  }
+
+  const LEVEL_LABEL = { error: 'エラー', warn: '警告', info: '情報' };
+
+  function renderIssues(issues) {
+    const errors = issues.filter(i => i.level === 'error').length;
+    const warns = issues.filter(i => i.level === 'warn').length;
+    $('status').innerHTML = errors || warns
+      ? `<span class="e">エラー ${errors}</span> / <span class="w">警告 ${warns}</span>`
+      : '<span class="ok">✓ 問題なし</span>';
+    if (!issues.length) {
+      $('issues').innerHTML = '<li class="empty">問題はありません</li>';
+      return;
+    }
+    const order = { error: 0, warn: 1, info: 2 };
+    const sorted = issues.map((x, idx) => ({ x, idx }))
+      .sort((a, b) => order[a.x.level] - order[b.x.level] || (a.x.line || 0) - (b.x.line || 0));
+    $('issues').innerHTML = sorted.map(({ x, idx }) => {
+      const where = [x.line ? 'L' + x.line : '', x.table != null ? `[${x.table}]` : ''].filter(Boolean).join(' ');
+      const fix = x.fix === 'fit' && state.mode === 'grid' ? `<button class="fix" data-fix="${idx}">列数に合わせる</button>` : '';
+      return `<li data-issue="${idx}"><span class="lv ${x.level}">${LEVEL_LABEL[x.level]}</span>`
+        + `<span>${where ? `<span class="where">${esc(where)}</span> ` : ''}${esc(x.msg)}</span>${fix}</li>`;
+    }).join('');
+  }
+
+  function markCells(issues) {
+    const g = $('gridView');
+    g.querySelectorAll('.err-cell, .warn-cell').forEach(el => el.classList.remove('err-cell', 'warn-cell'));
+    g.querySelectorAll('.err-row, .warn-row').forEach(el => el.classList.remove('err-row', 'warn-row'));
+    g.querySelectorAll('.has-error').forEach(el => el.classList.remove('has-error'));
+    g.querySelectorAll('[data-issue-title]').forEach(el => {
+      el.removeAttribute('title');
+      el.removeAttribute('data-issue-title');
+    });
+    for (const i of issues) {
+      if (i.s == null || i.level === 'info') continue;
+      const cls = i.level === 'error' ? 'err' : 'warn';
+      if (i.level === 'error') g.querySelector(`section[data-s="${i.s}"]`)?.classList.add('has-error');
+      let el;
+      if (i.r === 'name' || (i.r === 'h' && i.f != null)) {
+        el = findInput({ s: i.s, r: i.r, f: i.f });
+      } else if (typeof i.r === 'number' && i.f != null) {
+        el = findInput({ s: i.s, r: i.r, f: i.f });
+      } else if (typeof i.r === 'number') {
+        el = g.querySelector(`section[data-s="${i.s}"] tr[data-r="${i.r}"]`);
+        el?.classList.add(cls + '-row');
+        if (el) {
+          el.title = i.msg;
+          el.setAttribute('data-issue-title', '');
+        }
+        continue;
+      }
+      if (el) {
+        el.classList.add(cls + '-cell');
+        el.title = el.title ? el.title + '\n' + i.msg : i.msg;
+        el.setAttribute('data-issue-title', '');
+      }
+    }
+  }
+
+  function renderPatterns(doc) {
+    const sel = $('selFilter');
+    const patterns = doc ? C.allPatterns(doc) : [];
+    if (state.filter != null && !patterns.includes(state.filter)) state.filter = null;
+    sel.innerHTML = '<option value="">すべて</option>'
+      + patterns.map(p => `<option value="${p}"${p === state.filter ? ' selected' : ''}>${p}</option>`).join('');
+    sel.disabled = state.mode !== 'grid' || !patterns.length;
+
+    const box = $('patterns');
+    const secs = doc ? doc.sections.map((s, si) => ({ s, si })).filter(x => x.s.hasPattern) : [];
+    if (!secs.length) {
+      box.innerHTML = '<div class="empty">パターン列のあるテーブルはありません</div>';
+      return;
+    }
+    let h = '<table class="matrix"><thead><tr><th>テーブル</th><th title="パターン番号が空の行">共通</th>'
+      + patterns.map(p => `<th class="${p === state.filter ? 'on' : ''}">${p}</th>`).join('') + '</tr></thead><tbody>';
+    for (const { s } of secs) {
+      const rows = s.rows.filter(r => r.kind === 'data');
+      const common = rows.filter(r => r.pattern === '').length;
+      h += `<tr><td>${esc(s.name || '（無名）')}</td><td>${common}</td>`;
+      for (const p of patterns) {
+        const n = rows.filter(r => C.patternsOf(r).includes(p)).length;
+        h += `<td class="${p === state.filter ? 'on' : ''}${n + common === 0 ? ' zero' : ''}">${n}</td>`;
+      }
+      h += '</tr>';
+    }
+    h += '</tbody></table><div class="empty" style="margin-top:6px">数字はそのパターンだけの行の数。赤の 0 は、そのパターンで行が1つも無いテーブル。</div>';
+    box.innerHTML = h;
+  }
+
+  // ---------- 表の編集 ----------
+
+  const grid = $('gridView');
+
+  function locate(el) {
+    const ds = el.dataset;
+    const s = ds.s != null ? Number(ds.s) : null;
+    const r = ds.r == null ? null : (ds.r === 'name' || ds.r === 'h' ? ds.r : Number(ds.r));
+    const f = ds.f != null ? Number(ds.f) : null;
+    return { s, r, f };
+  }
+
+  grid.addEventListener('focusin', e => {
+    if (e.target.matches('input, textarea')) state.pendingSnap = snapshot();
+  });
+
+  grid.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.matches('input, textarea')) return;
+    if (state.pendingSnap) {
+      pushUndo(state.pendingSnap);
+      state.pendingSnap = null;
+      $('btnUndo').disabled = false;
+      $('btnRedo').disabled = true;
+    }
+    const doc = state.doc;
+    const { s, r, f } = locate(el);
+    const sec = s != null ? doc.sections[s] : null;
+    if (el.dataset.kind === 'comments') {
+      sec.comments = el.value.split('\n');
+    } else if (el.dataset.kind === 'trailing') {
+      doc.trailing = el.value.split('\n');
+    } else if (r === 'name') {
+      sec.name = el.value;
+    } else if (r === 'h') {
+      sec.columns[f - (sec.hasPattern ? 1 : 0)].name = el.value;
+    } else if (el.classList.contains('ctext')) {
+      sec.rows[r].text = el.value;
+    } else if (el.classList.contains('cell')) {
+      C.setField(sec, sec.rows[r], f, el.value);
+      el.classList.toggle('null', el.value === C.NULL_VALUE);
+      el.classList.remove('missing');
+      const th = el.closest('table').querySelector(`th.col[data-f="${f}"]`);
+      if (th) {
+        const need = C.displayWidth(el.value) + 4;
+        const cur = parseFloat(th.style.minWidth.replace('calc(', '')) || 0;
+        if (need > cur && need <= 52) th.style.minWidth = `calc(${need}ch + 20px)`;
+      }
+    }
+    setDirty();
+    scheduleLint();
+  });
+
+  grid.addEventListener('change', e => {
+    const el = e.target;
+    const { s, f } = locate(el);
+    const sec = s != null ? state.doc.sections[s] : null;
+    if (el.matches('select.mark')) {
+      mutate(() => {
+        sec.columns[f - (sec.hasPattern ? 1 : 0)].mark = el.value;
+      }, { s, r: 'h', f, select: false });
+      return;
+    }
+    if (el.matches('input.cname')) {
+      // 列名の末尾に記号を打った場合は、記号の選択に移す
+      const col = sec.columns[f - (sec.hasPattern ? 1 : 0)];
+      if (!col.mark) {
+        const sm = C.splitMark(col.name);
+        if (sm.mark) {
+          col.name = sm.name;
+          col.mark = sm.mark;
+          render();
+        }
+      }
+      return;
+    }
+    // コメント欄の // の付け忘れを補う
+    const fixComment = line => (line.trim() === '' || line.trim().startsWith('//')) ? line.trim() : '// ' + line.trim();
+    if (el.dataset.kind === 'comments') {
+      sec.comments = el.value.split('\n').map(fixComment);
+      while (sec.comments.length && sec.comments[sec.comments.length - 1] === '') sec.comments.pop();
+      while (sec.comments.length && sec.comments[0] === '') sec.comments.shift();
+      render();
+    } else if (el.dataset.kind === 'trailing') {
+      state.doc.trailing = el.value.split('\n').map(fixComment).filter((l, i, a) => l !== '' || (i > 0 && i < a.length - 1));
+      render();
+    } else if (el.classList.contains('ctext')) {
+      const row = sec.rows[locate(el).r];
+      row.text = fixComment(row.text);
+      el.value = row.text;
+      if (row.text === '') {
+        row.kind = 'blank';
+        render();
+      }
+      scheduleLint();
+    }
+  });
+
+  grid.addEventListener('keydown', e => {
+    const el = e.target;
+    if (el.matches('input.cell')) {
+      const { s, r, f } = locate(el);
+      if (e.altKey && e.code === 'KeyN') {
+        e.preventDefault();
+        mutate(() => {
+          const sec = state.doc.sections[s];
+          C.setField(sec, sec.rows[r], f, el.value === C.NULL_VALUE ? '' : C.NULL_VALUE);
+        }, { s, r, f });
+        return;
+      }
+      const down = (e.key === 'Enter' && !e.shiftKey) || e.key === 'ArrowDown';
+      const up = (e.key === 'Enter' && e.shiftKey) || e.key === 'ArrowUp';
+      if (down || up) {
+        e.preventDefault();
+        const rows = state.doc.sections[s].rows;
+        let n = r;
+        do n += down ? 1 : -1; while (n >= 0 && n < rows.length && rows[n].kind !== 'data');
+        if (n >= 0 && n < rows.length) {
+          restoreFocus({ s, r: n, f });
+        } else if (down && e.key === 'Enter') {
+          mutate(() => {
+            const sec = state.doc.sections[s];
+            sec.rows.splice(r + 1, 0, newRow(sec, sec.rows[r].pattern));
+          }, { s, r: r + 1, f });
+        }
+      }
+    } else if (el.matches('input.tname, input.cname') && e.key === 'Enter') {
+      e.preventDefault();
+      el.blur();
+    }
+  });
+
+  grid.addEventListener('paste', e => {
+    const el = e.target;
+    if (!el.matches('input.cell, input.cname')) return;
+    const text = e.clipboardData.getData('text/plain');
+    if (!/[\t\r\n]/.test(text.replace(/[\r\n]+$/, ''))) return;
+    e.preventDefault();
+    const table = C.parseTsv(text);
+    if (!table.length) return;
+    const { s, r, f } = locate(el);
+    mutate(() => {
+      const sec = state.doc.sections[s];
+      const off = sec.hasPattern ? 1 : 0;
+      if (r === 'h') {
+        // 1行目を列名にする。足りない列は追加する
+        table[0].forEach((name, j) => {
+          const ci = f - off + j;
+          if (ci < 0) return;
+          const sm = C.splitMark(name);
+          if (ci < sec.columns.length) sec.columns[ci] = sm;
+          else {
+            sec.columns.push(sm);
+            for (const row of sec.rows) if (row.kind === 'data' && row.cells.length === ci) row.cells.push('');
+          }
+        });
+        return;
+      }
+      let ri = r;
+      for (const values of table) {
+        while (ri < sec.rows.length && sec.rows[ri].kind !== 'data') ri++;
+        if (ri >= sec.rows.length) sec.rows.push(newRow(sec, sec.rows[r].pattern));
+        values.forEach((v, j) => C.setField(sec, sec.rows[ri], f + j, v));
+        ri++;
+      }
+    }, { s, r, f });
+    toast(`${table.length} 行を貼り付けました`);
+  });
+
+  grid.addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const secEl = btn.closest('section[data-s]');
+    const si = secEl ? Number(secEl.dataset.s) : null;
+    const doc = state.doc;
+    const sec = si != null ? doc.sections[si] : null;
+    const off = sec && sec.hasPattern ? 1 : 0;
+    const th = btn.closest('th[data-f]');
+    const ci = th ? Number(th.dataset.f) - off : null;
+    const tr = btn.closest('tr[data-r]');
+    const ri = tr ? Number(tr.dataset.r) : null;
+    const dataRows = sec ? sec.rows.filter(r => r.kind === 'data') : [];
+
+    switch (act) {
+      case 'sec-add':
+        mutate(() => { doc.sections.push(newSection()); }, { s: doc.sections.length, r: 'name' });
+        break;
+      case 'sec-up':
+        mutate(() => swap(doc.sections, si, si - 1));
+        break;
+      case 'sec-down':
+        mutate(() => swap(doc.sections, si, si + 1));
+        break;
+      case 'sec-dup':
+        mutate(() => { doc.sections.splice(si + 1, 0, JSON.parse(JSON.stringify(sec))); }, { s: si + 1, r: 'name' });
+        break;
+      case 'sec-del':
+        if (dataRows.length && !confirm(`[${sec.name}] を削除しますか？（${dataRows.length} 行）`)) return;
+        mutate(() => { doc.sections.splice(si, 1); });
+        break;
+      case 'sec-pattern':
+        if (sec.hasPattern && dataRows.some(r => r.pattern !== '')
+            && !confirm('パターン番号の列を外すと、各行のパターン番号は削除されます。よろしいですか？')) return;
+        mutate(() => {
+          sec.hasPattern = !sec.hasPattern;
+          for (const r of dataRows) r.pattern = '';
+        }, sec.hasPattern ? null : { s: si, r: sec.rows.findIndex(r => r.kind === 'data'), f: 0 });
+        break;
+      case 'sec-addcol':
+        mutate(() => {
+          for (const r of dataRows) if (r.cells.length === sec.columns.length) r.cells.push('');
+          sec.columns.push({ name: '', mark: '' });
+        }, { s: si, r: 'h', f: sec.columns.length + off });
+        break;
+      case 'sec-addrow':
+        mutate(() => { sec.rows.push(newRow(sec, state.filter != null ? String(state.filter) : '')); },
+          { s: si, r: sec.rows.length, f: off });
+        break;
+      case 'sec-comment':
+        if (sec.comments.length) {
+          restoreFocus({ s: si, kind: 'comments' });
+          return;
+        }
+        mutate(() => { sec.comments = ['// ']; }, { s: si, kind: 'comments', select: false });
+        break;
+      case 'sec-tsv':
+        copyText(C.toTsv(sec)).then(ok => toast(ok ? 'TSV をコピーしました' : 'コピーできませんでした'));
+        break;
+      case 'col-ins':
+        mutate(() => {
+          sec.columns.splice(ci + 1, 0, { name: '', mark: '' });
+          for (const r of dataRows) if (r.cells.length > ci) r.cells.splice(ci + 1, 0, '');
+        }, { s: si, r: 'h', f: ci + 1 + off });
+        break;
+      case 'col-del': {
+        const col = sec.columns[ci];
+        if (dataRows.some(r => (r.cells[ci] ?? '') !== '')
+            && !confirm(`列 ${col.name + col.mark} を削除しますか？（値も削除されます）`)) return;
+        mutate(() => {
+          sec.columns.splice(ci, 1);
+          for (const r of dataRows) if (r.cells.length > ci) r.cells.splice(ci, 1);
+        });
+        break;
+      }
+      case 'col-left':
+      case 'col-right': {
+        const cj = act === 'col-left' ? ci - 1 : ci + 1;
+        mutate(() => {
+          if (!swap(sec.columns, ci, cj)) return false;
+          for (const r of dataRows) {
+            while (r.cells.length <= Math.max(ci, cj)) r.cells.push('');
+            swap(r.cells, ci, cj);
+          }
+        }, { s: si, r: 'h', f: cj + off, select: false });
+        break;
+      }
+      case 'row-ins':
+        mutate(() => { sec.rows.splice(ri + 1, 0, newRow(sec, sec.rows[ri].pattern)); }, { s: si, r: ri + 1, f: off });
+        break;
+      case 'row-dup':
+        mutate(() => {
+          const copy = JSON.parse(JSON.stringify(sec.rows[ri]));
+          sec.rows.splice(ri + 1, 0, copy);
+        }, { s: si, r: ri + 1, f: off });
+        break;
+      case 'row-up':
+        mutate(() => swap(sec.rows, ri, ri - 1));
+        break;
+      case 'row-down':
+        mutate(() => swap(sec.rows, ri, ri + 1));
+        break;
+      case 'row-del':
+        mutate(() => { sec.rows.splice(ri, 1); });
+        break;
+      case 'row-toggle':
+        mutate(() => {
+          const r = sec.rows[ri];
+          if (r.kind === 'data') {
+            sec.rows[ri] = { kind: 'comment', text: '// ' + C.fieldsOf(sec, r).join('|') };
+          } else if (r.kind === 'comment') {
+            const body = r.text.replace(/^\s*\/\/\s?/, '');
+            if (C.jtrim(body) === '') return false;
+            const fields = C.splitFields(body);
+            sec.rows[ri] = sec.hasPattern
+              ? { kind: 'data', pattern: fields[0], cells: fields.slice(1) }
+              : { kind: 'data', pattern: '', cells: fields };
+          }
+        });
+        break;
+    }
+  });
+
+  // ---------- チェック結果 ----------
+
+  $('issues').addEventListener('click', e => {
+    const fixBtn = e.target.closest('[data-fix]');
+    const li = e.target.closest('[data-issue]');
+    if (!li) return;
+    const issue = state.issues[Number(li.dataset.issue)];
+    if (state.mode === 'text') {
+      if (issue.line) selectLine($('text'), issue.line);
+      return;
+    }
+    if (issue.s == null) return;
+    const sec = state.doc.sections[issue.s];
+    const off = sec.hasPattern ? 1 : 0;
+    if (fixBtn) {
+      mutate(() => {
+        const row = sec.rows[issue.r];
+        while (row.cells.length < sec.columns.length) row.cells.push('');
+        row.cells.length = sec.columns.length;
+      }, { s: issue.s, r: issue.r, f: off });
+      return;
+    }
+    if (issue.r === 'h' && issue.f == null) restoreFocus({ s: issue.s, r: 'name' });
+    else if (typeof issue.r === 'number' && sec.rows[issue.r].kind === 'comment') restoreFocus({ s: issue.s, r: issue.r });
+    else restoreFocus({ s: issue.s, r: issue.r, f: issue.f ?? off });
+  });
+
+  function selectLine(ta, line) {
+    const lines = ta.value.split('\n');
+    let start = 0;
+    for (let i = 0; i < line - 1 && i < lines.length; i++) start += lines[i].length + 1;
+    const end = start + (lines[line - 1] || '').length;
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+    ta.scrollTop = Math.max(0, (line - 5) * lh);
+  }
+
+  // ---------- 表示の切り替え ----------
+
+  // テキスト表示に切り替えたときの内容。変更が無ければ、表に戻るときに読み込み直さない
+  let textOnSwitch = null;
+
+  function toText() {
+    if (state.mode === 'text') return;
+    $('text').value = textOnSwitch = C.serialize(state.doc, { align: state.align });
+    state.mode = 'text';
+    render();
+  }
+
+  function toGrid() {
+    if (state.mode === 'grid') return true;
+    if (state.doc && $('text').value === textOnSwitch) {
+      state.mode = 'grid';
+      render();
+      return true;
+    }
+    const parsed = C.parse($('text').value);
+    if (parsed.fatal.length) {
+      runLint();
+      toast('書式の誤りがあるため、表で表示できません');
+      return false;
+    }
+    if (state.doc) pushUndo(snapshot());
+    state.doc = parsed.doc;
+    state.mode = 'grid';
+    render();
+    return true;
+  }
+
+  $('btnGrid').addEventListener('click', toGrid);
+  $('btnText').addEventListener('click', toText);
+  $('text').addEventListener('input', () => {
+    setDirty();
+    scheduleLint();
+  });
+  $('btnFormat').addEventListener('click', () => {
+    const parsed = C.parse($('text').value);
+    if (parsed.fatal.length) {
+      toast('書式の誤りがあるため、整形できません');
+      return;
+    }
+    $('text').value = C.serialize(parsed.doc, { align: state.align });
+    setDirty();
+    runLint();
+  });
+
+  $('chkAlign').addEventListener('change', e => {
+    state.align = e.target.checked;
+    try { localStorage.setItem(ALIGN_KEY, state.align ? '1' : '0'); } catch (err) { /* 無視 */ }
+    if (state.mode === 'grid') {
+      setDirty();
+      render();
+    }
+  });
+
+  $('selFilter').addEventListener('change', e => {
+    state.filter = e.target.value === '' ? null : Number(e.target.value);
+    render();
+  });
+
+  // ---------- ファイル ----------
+
+  const FILE_TYPES = [{ description: 'DbJigu フィクスチャ', accept: { 'text/plain': ['.txt'] } }];
+
+  function load(text, name, handle) {
+    const parsed = C.parse(text);
+    state.fileName = name;
+    state.handle = handle || null;
+    state.undo = [];
+    state.redo = [];
+    state.filter = null;
+    state.dirty = false;
+    if (parsed.fatal.length) {
+      state.doc = null;
+      state.mode = 'text';
+      $('text').value = text;
+      toast('書式の誤りがあるため、テキストで開きました');
+    } else {
+      state.doc = parsed.doc;
+      state.mode = 'grid';
+    }
+    render();
+  }
+
+  function confirmDiscard() {
+    return !state.dirty || confirm('保存していない変更があります。破棄しますか？');
+  }
+
+  async function openFile() {
+    if (!confirmDiscard()) return;
+    if (window.showOpenFilePicker) {
+      try {
+        const [handle] = await window.showOpenFilePicker({ types: FILE_TYPES });
+        const file = await handle.getFile();
+        load(await file.text(), file.name, handle);
+      } catch (e) {
+        if (e.name !== 'AbortError') toast('開けませんでした: ' + e.message);
+      }
+    } else {
+      $('fileInput').value = '';
+      $('fileInput').click();
+    }
+  }
+
+  $('fileInput').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (file) load(await file.text(), file.name, null);
+  });
+
+  async function writeHandle(handle, text) {
+    const w = await handle.createWritable();
+    await w.write(text);
+    await w.close();
+  }
+
+  async function save(saveAs) {
+    if (state.mode === 'grid' || C.parse($('text').value).fatal.length === 0) runLint();
+    const errors = state.issues.filter(i => i.level === 'error').length;
+    if (errors && !confirm(`エラーが ${errors} 件あります（DbJigu で読むと例外になります）。保存しますか？`)) return;
+    const text = currentText();
+    try {
+      if (!saveAs && state.handle) {
+        await writeHandle(state.handle, text);
+      } else if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({ suggestedName: state.fileName, types: FILE_TYPES });
+        await writeHandle(handle, text);
+        state.handle = handle;
+        state.fileName = handle.name;
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+        a.download = state.fileName;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') toast('保存できませんでした: ' + e.message);
+      return;
+    }
+    setDirty(false);
+    toast('保存しました: ' + state.fileName);
+  }
+
+  $('btnNew').addEventListener('click', () => {
+    if (!confirmDiscard()) return;
+    state.doc = newDoc();
+    state.fileName = 'fixture.txt';
+    state.handle = null;
+    state.undo = [];
+    state.redo = [];
+    state.filter = null;
+    state.mode = 'grid';
+    setDirty(false);
+    render({ s: 0, r: 'name' });
+  });
+  $('btnOpen').addEventListener('click', openFile);
+  $('btnSave').addEventListener('click', () => save(false));
+  $('btnSaveAs').addEventListener('click', () => save(true));
+  $('btnUndo').addEventListener('click', undo);
+  $('btnRedo').addEventListener('click', redo);
+
+  // ドラッグ＆ドロップで開く（Chrome / Edge では上書き保存もできるようにハンドルを取る）
+  let dragDepth = 0;
+  window.addEventListener('dragenter', e => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragDepth++;
+    document.body.classList.add('dragging');
+  });
+  window.addEventListener('dragleave', () => {
+    if (--dragDepth <= 0) {
+      dragDepth = 0;
+      document.body.classList.remove('dragging');
+    }
+  });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', async e => {
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove('dragging');
+    const item = e.dataTransfer.items && e.dataTransfer.items[0];
+    const handlePromise = item && item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+    const file = e.dataTransfer.files[0];
+    if (!file || !confirmDiscard()) return;
+    let handle = null;
+    try { handle = handlePromise ? await handlePromise : null; } catch (err) { handle = null; }
+    load(await file.text(), file.name, handle && handle.kind === 'file' ? handle : null);
+  });
+
+  window.addEventListener('keydown', e => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+    const key = e.key.toLowerCase();
+    if (key === 's') {
+      e.preventDefault();
+      save(e.shiftKey);
+    } else if (key === 'o') {
+      e.preventDefault();
+      openFile();
+    } else if ((key === 'z' || key === 'y') && !e.target.matches('input, textarea')) {
+      e.preventDefault();
+      if (key === 'y' || e.shiftKey) redo();
+      else undo();
+    }
+  });
+
+  window.addEventListener('beforeunload', e => {
+    if (state.dirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // ---------- その他 ----------
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    }
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  state.doc = newDoc();
+  render();
+})();
+</script>
+</body>
+</html>

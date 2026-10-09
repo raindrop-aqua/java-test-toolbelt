@@ -669,6 +669,15 @@ Lines starting with `//` are ignored for both import and verification. Leading s
 
 A comment cannot start in the middle of a line. The `//` in `A001|https://example.com` is part of the value. If you comment out every row to verify, you get an error, so a test never passes without verifying anything.
 
+### Fixture editor
+
+Open [tools/fixture-editor.html](../tools/fixture-editor.html) in a browser to edit fixtures as tables.
+
+- It finds the mistakes that DbJigu throws an exception for, such as a row whose number of values doesn't match the header or a pattern number that isn't a number, before you run the test.
+- When you save with "桁揃え" (align) on, the `|` characters are lined up. Fields are trimmed, so the meaning doesn't change. However, when verification fails, the message shows the row as written, including the padding.
+- When you choose a pattern number, only the rows imported or verified for that pattern (its own rows and the common rows) are shown at full strength.
+- You can copy a range from Excel and paste it into a cell.
+
 ### Empty strings and NULL
 
 `<null>` is NULL, and an empty field (the middle of `A001||C001`) is an empty string. An empty field at the end of a line is also an empty string. Note that Oracle treats an empty string as NULL (this is not tested in this repository).
