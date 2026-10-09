@@ -99,6 +99,18 @@ A001|100|200|CANCELED|Express|-
 - How strings sort depends on the database's collation, so use `<`, `>`, and the other ordering marks mainly for numbers and dates.
 - LOB columns can't use `<`, `<=`, `>`, or `>=`.
 
+## Fixture editor
+
+[`tools/fixture-editor.html`](tools/fixture-editor.html) edits fixtures as tables. Download the file and open it in a browser. It needs no installation and sends nothing over the network.
+
+- Edit each table as a grid, then save it. With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
+- It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or a pattern number that isn't a number) and shows the line numbers.
+- Choose a pattern number to dim the rows that are not part of it, and see how many rows each table has per pattern.
+- Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.
+- In Chrome and Edge, it saves back to the file you opened. Other browsers download the file instead.
+
+It does not connect to a database, so it can't check table names, column names, or whether a value matches the column's type. Run the test to check those.
+
 ## Development
 
 Tests connect to PostgreSQL 17. Tables are created inside the test transaction and rolled back at the end, so nothing is left in the database.
@@ -116,6 +128,12 @@ Tests connect to PostgreSQL 17. Tables are created inside the test transaction a
    ```
 
    You can also change the user and password with `-Pdbjigu.user=...` and `-Pdbjigu.password=...`. To run only some tests, use `--tests` (for example `./gradlew test --tests '*OrderServiceTest*'`).
+
+The fixture editor's tests need only Node.js (and Chrome for the UI tests, which are skipped without it):
+
+```bash
+node --test tools/test/*.test.js
+```
 
 GitHub Actions runs the same tests on every pull request and every push to `main` ([.github/workflows/build.yml](.github/workflows/build.yml)).
 

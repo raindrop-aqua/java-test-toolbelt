@@ -33,3 +33,10 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew build -Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres
+
+  # フィクスチャエディタ（tools/fixture-editor.html）のテスト。ランナーにある Node と Chrome を使う
+  fixture-editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: node --test tools/test/*.test.js

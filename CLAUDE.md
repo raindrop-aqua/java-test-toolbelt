@@ -23,6 +23,7 @@ Because of how it is distributed, `DbJigu.java` must:
 ./gradlew test --tests 'DbJiguTest$パターン番号'          # one nested test class
 ./gradlew test --tests '*OrderServiceTest*'              # the guide's examples
 ./gradlew test -Pdbjigu.url=jdbc:postgresql://host:5432/postgres   # override the DB (also dbjigu.user / dbjigu.password)
+node --test tools/test/*.test.js                         # fixture editor (tools/fixture-editor.html)
 ```
 
 ## Fixture format
@@ -47,7 +48,7 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 - Tests connect to PostgreSQL 17, which runs in Apple Container (`container ls`, container name `postgresql17`, database/user/password `postgres`). Its port is not published to localhost, so the default URL uses the container IP `192.168.64.2`. Start it with `container start postgresql17` if it is stopped.
 - `DbJiguTest` creates the schema from `src/test/resources/schema/postgresql.sql` inside a transaction and rolls back after each test. PostgreSQL DDL is transactional, so nothing is left in the DB. Don't create tables permanently. The DB also holds an unrelated `test_user` table.
 - Fixture paths are relative to the repo root, which Gradle uses as the working directory.
-- GitHub Actions (`.github/workflows/build.yml`) runs `./gradlew build` on Java 17 against a `postgres:17` service, on every pull request and push to `main`, passing `-Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres`. The README's Development section explains the same setup for people; keep the two consistent.
+- GitHub Actions (`.github/workflows/build.yml`) runs `./gradlew build` on Java 17 against a `postgres:17` service, on every pull request and push to `main`, passing `-Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres`. A second job runs the fixture editor's tests. The README's Development section explains the same setup for people; keep the two consistent.
 
 ## Spring example
 
@@ -65,6 +66,41 @@ Users run DbJigu in Spring Boot + Spring Data JPA projects, so `src/test/java/co
 - Every fixture and test shown in the guide is a real file under `src/test`: `example/OrderServiceTest` and `OrderService` (order management, plain JDBC), `src/test/resources/schema/order.sql`, and `src/test/resources/data/order/`. When you change one, update the guide so the quoted code and fixtures stay identical.
 - The Spring section quotes `spring/DbJiguSpringExampleTest`.
 - When DbJigu's behavior, fixture format, or error messages change, update the guide as well as the README and Javadoc.
+
+## Fixture editor
+
+`tools/fixture-editor.html` is a browser tool for editing fixtures as tables. Like `DbJigu.java`, it is meant to be copied, so it stays one self-contained HTML file: no external scripts, styles, fonts, or network access, and it works when opened from `file://`. The UI text is Japanese. The README's "Fixture editor" section and the guide's Tips describe it for users; keep them in sync with what it does.
+
+### Structure
+
+- `<script id="core">` defines `FixtureCore`, which parses, writes, and checks fixtures without touching the DOM. The tests load this block on its own, so keep it free of DOM access and keep the `id`.
+- The second `<script>` is the UI. The model (`state.doc`) is the source of truth while the table view is shown. The table is rebuilt from the model after every structural change (`mutate`). Typing in a cell updates the model in place without rebuilding, so focus is kept.
+- Model: `doc = { eol, sections, trailing }`. A section is `{ name, comments, headerComments, columns: [{ name, mark }], hasPattern, rows }`, and a row is `{ kind: 'data', pattern, cells }`, `{ kind: 'comment', text }`, or `{ kind: 'blank' }`. Issue positions use `s` (section), `r` (`'name'`, `'h'`, or a row index), and `f` (field index, where 0 is the pattern number when `hasPattern`).
+
+### Rules it must keep
+
+- Read files exactly as `DbJigu.readFile` does: Java-style `trim()` (only characters up to U+0020, so a full-width space is kept), two-character marks first, a second `{...}` line in a table starts a new table, and the same structural errors with the same messages. When the fixture format or DbJigu's error checks or messages change, update `FixtureCore` and its tests too.
+- After a structural error, keep reading so the rest of the file can be shown, but don't report errors that only follow from the first one.
+- Saving must never change what DbJigu reads. Aligned output pads fields with spaces and starts data rows with one space to line up with `{`; this is safe only because DbJigu trims every field.
+- A comment right after a data row belongs to that table (a commented-out row). A comment after a blank line belongs to the next table (a heading). This keeps comments where they were when the file is saved.
+- Checks that DbJigu turns into exceptions are `error`. Things that work but are often a mistake are `warn`. A repeated column is only `info`, because it is correct in verify files (ranges).
+
+### Decided not to do
+
+- **Connecting to a database.** The editor stays offline, so it can't check table names, column names, or value types. A separate tool could generate fixture skeletons from a database later.
+- **Creating expected files from the current database contents.** That turns the code's actual output into the expected result, so the test can't fail. Don't add it to the editor or to a future generator.
+- **Escaping `|` or writing values that start with `[`, `{`, or `//`.** DbJigu can't read them (issue #12), so the editor reports them as errors instead.
+
+### Tests
+
+```bash
+node --test tools/test/*.test.js     # FixtureCore and the UI (no npm packages needed)
+```
+
+- `core.test.js` round-trips every fixture under `src/test/resources/data` (with and without alignment) and tests parsing, writing, checks, and TSV. Fixtures added to the repo are picked up automatically.
+- `ui.test.js` opens the page in headless Chrome with `ui-harness.js` injected and checks the result of real UI operations. It is skipped when Chrome isn't found (`CHROME_PATH` overrides the location), except in CI, where a missing Chrome is a failure.
+- GitHub Actions runs these in the `fixture-editor` job.
+- When a change could affect what DbJigu reads (parsing or alignment), also run `./gradlew test` against a copy of the repo whose fixtures were rewritten with aligned output. The only expected failure is the test in `DbJiguTest` that checks the raw row text in the error message.
 
 ## Code review
 
