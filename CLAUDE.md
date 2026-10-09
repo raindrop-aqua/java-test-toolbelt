@@ -45,6 +45,10 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 - `DbJiguTest` creates the schema from `src/test/resources/schema/postgresql.sql` inside a transaction and rolls back after each test. PostgreSQL DDL is transactional, so nothing is left in the DB. Don't create tables permanently. The DB also holds an unrelated `test_user` table.
 - Fixture paths are relative to the repo root, which Gradle uses as the working directory.
 
+## Code review
+
+`.claude/agents/dbjigu-reviewer.md` is a project subagent for reviewing `DbJigu.java`. It reports bugs it has verified, without fixing them, and applies behavior-preserving simplifications after confirming that `./gradlew build` passes. Use it after changing `DbJigu.java`.
+
 ## Conventions
 
 Code comments, Javadoc, console messages, exception messages, and test method names are written in Japanese. The README has an English version (`README.md`) and a Japanese version (`README.ja.md`). Keep the two in sync.
