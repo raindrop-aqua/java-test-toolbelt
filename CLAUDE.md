@@ -45,6 +45,15 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 - `DbJiguTest` creates the schema from `src/test/resources/schema/postgresql.sql` inside a transaction and rolls back after each test. PostgreSQL DDL is transactional, so nothing is left in the DB. Don't create tables permanently. The DB also holds an unrelated `test_user` table.
 - Fixture paths are relative to the repo root, which Gradle uses as the working directory.
 
+## Spring example
+
+Users run DbJigu in Spring Boot + Spring Data JPA projects, so `src/test/java/com/prism7/testtoolbelt/spring/` contains a working example (`DbJiguSpringExampleTest`, plus a test-only `@SpringBootApplication`, entity, and repository). Spring Boot is a test dependency here only for this example, imported as a BOM with `platform()` and no Boot plugin. `DbJigu.java` itself must still not depend on Spring.
+
+- The example gets its connection from `DataSourceUtils.getConnection(dataSource)`, calls `entityManager.flush()` before verifying, and uses `@Sql("/schema/postgresql.sql")` to create the tables inside the test transaction. An `@AfterTransaction` check confirms that the rollback happened.
+- `src/test/resources/application.properties` sets the datasource (the same `dbjigu.*` overrides apply) and `ddl-auto=none`.
+- Spring Boot's naming strategy rewrites even explicit `@Column` names (`MemberId` becomes `member_id`), so entity mappings use the lowercase PostgreSQL names.
+- When you change the README's Spring example, keep it consistent with this test and with the Javadoc example in `DbJigu.java`.
+
 ## Code review
 
 `.claude/agents/dbjigu-reviewer.md` is a project subagent for reviewing `DbJigu.java`. It reports bugs it has verified, without fixing them, and applies behavior-preserving simplifications after confirming that `./gradlew build` passes. Use it after changing `DbJigu.java`.
