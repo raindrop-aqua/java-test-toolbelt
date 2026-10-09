@@ -1,17 +1,21 @@
+// 顧客
 [customer]
 {customer_id|customer_name|customer_rank}
 C001|山田 太郎|REGULAR
 
+// 商品
 [product]
 {product_code|product_name|unit_price|stock}
 P001|ボールペン|120|96
 P002|ノート|300|48
 
+// 受注
 [orders]
 {order_no|customer_id|status|total_amount|note|ordered_at|shipped_at|updated_at}
 A001|C001|RECEIVED|960|<null>|2024-04-01 10:00|<null>|2024-04-01 10:00
 A002|C001|SHIPPED|120|<null>|2024-04-01 11:00|2024-04-02 09:00|2024-04-02 09:00
 
+// 受注明細
 [order_item]
 {order_no|line_no|product_code|quantity|amount}
 A001|1|P001|3|360

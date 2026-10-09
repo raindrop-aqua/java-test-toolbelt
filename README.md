@@ -68,6 +68,7 @@ For a working example, see [DbJiguSpringExampleTest](src/test/java/com/prism7/te
 | `{col1\|col2}` | Column names. A name ending in `@` is imported but not compared. |
 | `#` as the first column | The first field of each row lists the row's pattern numbers (`1,2`). An empty field means the row belongs to all patterns. |
 | `<null>` | NULL. |
+| `// comment` | A line starting with `//` is ignored. A comment cannot start in the middle of a line. |
 
 - Files are UTF-8, the separator is `|`, and every field is trimmed.
 - Values are converted to each column's type. Dates are written as `2024-04-01` or `2024/04/01`, timestamps as `2024-04-01 12:34:56[.fff]`, and times as `12:34[:56]`. A decimal in an integer-type column such as `INTEGER` or `BIGINT` is an error (for `NUMERIC(10)` or Oracle `NUMBER` columns, the database rounds it).

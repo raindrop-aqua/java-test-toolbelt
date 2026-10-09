@@ -405,6 +405,40 @@ class DbJiguTest {
     }
 
     @Nested
+    class コメント {
+
+        @Test
+        void スラッシュ2つで始まる行は無視する(@TempDir Path dir) {
+            String file = write(dir,
+                    "// 会員",
+                    "[Member]",
+                    "  // 先頭に空白があってもコメント",
+                    "{MemberId|MemberName}",
+                    "1|john",
+                    "// 2|sam",
+                    "3|https://example.com/a");
+            assertEquals(2, jigu.importFrom(file));
+            assertEquals(List.of("john", "https://example.com/a"), memberNames());
+            // コメントにした sam の行は検証もしない
+            jigu.assertExists(file);
+        }
+
+        @Test
+        void コメントがあってもエラーの行番号は変わらない(@TempDir Path dir) {
+            String file = write(dir, "// 会員", "[Member]", "{MemberId|MemberName}", "// 1|john", "2|sam|extra");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().startsWith(file + ":5 "), error.getMessage());
+        }
+
+        @Test
+        void 全行をコメントにすると検証はエラーにする(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "// 1|john");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.verifyExists(file));
+            assertTrue(error.getMessage().contains("検証対象の行がありません"), error.getMessage());
+        }
+    }
+
+    @Nested
     class ファイルの誤り {
 
         @Test

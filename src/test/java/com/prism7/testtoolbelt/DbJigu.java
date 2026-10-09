@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.1.2
+ * DB治具（DbJigu） v2.2.0
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -47,6 +47,7 @@ import java.util.stream.Collectors;
  *
  * <h2>フィクスチャの書式</h2>
  * <pre>
+ * // コメント
  * [テーブル名]
  * {#|列名1|列名2|列名3@}
  * 1|値1|値2|値3
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
  * </pre>
  * <ul>
  *   <li>文字コードは UTF-8、区切り文字は {@code |}。空行は無視する。</li>
+ *   <li>{@code //} で始まる行はコメントとして無視する。行の途中からはコメントにできない（値の {@code https://} などを壊さないため）。</li>
  *   <li>1ファイルに複数の {@code [テーブル名]} を記述できる。</li>
  *   <li>値の前後の空白は取り除く。{@code <null>} は NULL を表す。</li>
  *   <li>値は列の型（DBから取得）に合わせて変換して渡す。日付は {@code 2024-04-01} / {@code 2024/04/01}、
@@ -104,6 +106,7 @@ public class DbJigu {
 
     private static final String SEPARATOR = "|";
     private static final String NULL_VALUE = "<null>";
+    private static final String COMMENT_PREFIX = "//";
     private static final String PATTERN_COLUMN = "#";
     private static final String PATTERN_SEPARATOR = ",";
     private static final String MARK_CHARACTERS = "@<>=!%";
@@ -477,7 +480,7 @@ public class DbJigu {
             if (lineNumber == 1 && line.startsWith("\uFEFF")) {
                 line = line.substring(1).trim();
             }
-            if (line.isEmpty()) {
+            if (line.isEmpty() || line.startsWith(COMMENT_PREFIX)) {
                 continue;
             }
             if (line.startsWith("[")) {

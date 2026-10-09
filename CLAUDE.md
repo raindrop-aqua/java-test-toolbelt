@@ -13,7 +13,7 @@ Because of how it is distributed, `DbJigu.java` must:
 - keep working on several databases. The main target is PostgreSQL, and Oracle should keep working too, because it has been used there. Avoid DB-specific SQL.
 - never commit, roll back, or close the `Connection` it is given. In Spring tests, callers pass `DataSourceUtils.getConnection(dataSource)` so the test transaction can roll back.
 - throw on errors instead of swallowing them, so that a mistake can never pass silently.
-- record its version in the class Javadoc (`v2.1.2`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
+- record its version in the class Javadoc (`v2.2.0`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
 - keep the MIT license notice in the comment above `package`. Users copy only this file, so the notice has to travel with it (`LICENSE` holds the full text).
 
 ## Commands
@@ -36,6 +36,7 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 |val1|<null>
 ```
 
+- A line that starts with `//` (after trimming) is a comment and is skipped. There are no end-of-line comments, because values such as URLs contain `//`.
 - Files are UTF-8 and the separator is `|`. All fields are trimmed, and trailing empty fields are kept (`split(Pattern.quote("|"), -1)`; `split` takes a regex, so the separator must be quoted). `<null>` means NULL.
 - A header that starts with `#` makes the first field of each row its pattern numbers (comma-separated). An empty pattern field means the row belongs to every pattern. When patterns are passed to a method, it handles only rows in those patterns plus the common rows. Passing a pattern that no row uses is an error.
 - A mark at the end of a column name sets the comparison: `@` (not compared), `<` `<=` `>` `>=` (the DB value is on the left), `!=` (written as `(col <> ? OR col IS NULL)`), and `%` (prefix `LIKE ? ESCAPE '!'`, string columns only). Two-character marks are checked first in the `Operator` enum, and combining marks is an error. Importing ignores the marks. A repeated column is allowed when verifying, for ranges, but is an error when importing. `<null>` means `IS NULL` for every mark except `!=`, where it means `IS NOT NULL`. LOB columns are compared in Java (`matchesInJava`) and can't use the ordering marks.
