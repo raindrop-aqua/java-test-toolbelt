@@ -1,7 +1,7 @@
 [Member]
-{#;MemberId;MemberName}
-;0;common
-1;1;john
-2;2;sam
-1,2;3;both
-3;4;mike
+{#|MemberId|MemberName}
+|0|common
+1|1|john
+2|2|sam
+1,2|3|both
+3|4|mike

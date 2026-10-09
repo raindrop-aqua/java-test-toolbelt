@@ -23,20 +23,20 @@ DbJigu never commits, rolls back, or closes the connection you pass in.
 
 ```
 [Member]
-{#;MemberId;MemberName;UpdatedAt@}
-;0;common;<null>
-1;1;john;2024-04-01 12:34:56
-1,2;2;sam;2024/04/02
+{#|MemberId|MemberName|UpdatedAt@}
+|0|common|<null>
+1|1|john|2024-04-01 12:34:56
+1,2|2|sam|2024/04/02
 ```
 
 | Element | Meaning |
 |---|---|
 | `[TableName]` | Starts a table section. A file can contain several sections. |
-| `{col1;col2}` | Column names. A name ending in `@` is imported but not compared. |
+| `{col1\|col2}` | Column names. A name ending in `@` is imported but not compared. |
 | `#` as the first column | The first field of each row lists the row's pattern numbers (`1,2`). An empty field means the row belongs to all patterns. |
 | `<null>` | NULL. |
 
-- Files are UTF-8, the separator is `;`, and every field is trimmed.
+- Files are UTF-8, the separator is `|`, and every field is trimmed.
 - Values are converted to each column's type. Dates are written as `2024-04-01` or `2024/04/01`, and timestamps as `2024-04-01 12:34:56[.fff]`.
 - If you pass pattern numbers, only rows in those patterns and the common rows are processed. If you pass none, every row is processed. Passing a pattern number that no row uses is an error.
 - LOB columns (such as Oracle CLOB) are compared in Java rather than in SQL.

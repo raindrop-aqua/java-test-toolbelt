@@ -1,5 +1,5 @@
 [TestTable]
-{numeric_column;string_column;char_column;date_column;timestamp_column;boolean_column;clob_column}
-1;O'Brien;abc;2024/04/01;2024-04-01 12:34:56.789;true;テキスト
-  2  ;  padded  ;x;2024-04-02;2024-04-02 00:00;f;<null>
-3;<null>;<null>;<null>;<null>;<null>;
+{numeric_column|string_column|char_column|date_column|timestamp_column|boolean_column|clob_column}
+1|O'Brien|abc|2024/04/01|2024-04-01 12:34:56.789|true|テキスト
+  2  |  padded  |x|2024-04-02|2024-04-02 00:00|f|<null>
+3|<null>|<null>|<null>|<null>|<null>|

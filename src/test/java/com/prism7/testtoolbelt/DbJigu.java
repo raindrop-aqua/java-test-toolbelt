@@ -28,10 +28,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v1.0.0
+ * DB治具（DbJigu） v2.0.0
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -40,13 +41,13 @@ import java.util.stream.Collectors;
  * <h2>フィクスチャの書式</h2>
  * <pre>
  * [テーブル名]
- * {#;列名1;列名2;列名3@}
- * 1;値1;値2;値3
- * 1,2;値1;値2;&lt;null&gt;
- * ;値1;値2;値3
+ * {#|列名1|列名2|列名3@}
+ * 1|値1|値2|値3
+ * 1,2|値1|値2|&lt;null&gt;
+ * |値1|値2|値3
  * </pre>
  * <ul>
- *   <li>文字コードは UTF-8、区切り文字は {@code ;}。空行は無視する。</li>
+ *   <li>文字コードは UTF-8、区切り文字は {@code |}。空行は無視する。</li>
  *   <li>1ファイルに複数の {@code [テーブル名]} を記述できる。</li>
  *   <li>値の前後の空白は取り除く。{@code <null>} は NULL を表す。</li>
  *   <li>値は列の型（DBから取得）に合わせて変換して渡す。日付は {@code 2024-04-01} / {@code 2024/04/01}、
@@ -74,7 +75,7 @@ import java.util.stream.Collectors;
  */
 public class DbJigu {
 
-    private static final String SEPARATOR = ";";
+    private static final String SEPARATOR = "|";
     private static final String NULL_VALUE = "<null>";
     private static final String PATTERN_COLUMN = "#";
     private static final String PATTERN_SEPARATOR = ",";
@@ -444,7 +445,7 @@ public class DbJigu {
 
     // 区切り文字で分割し、各項目の前後の空白を除く（末尾の空の項目も残す）
     private static List<String> split(String line) {
-        return Arrays.stream(line.split(SEPARATOR, -1)).map(String::trim).collect(Collectors.toList());
+        return Arrays.stream(line.split(Pattern.quote(SEPARATOR), -1)).map(String::trim).collect(Collectors.toList());
     }
 
     private static IllegalArgumentException formatError(String filePath, int lineNumber, String message) {
