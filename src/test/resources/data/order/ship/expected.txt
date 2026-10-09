@@ -1,0 +1,9 @@
+[orders]
+{status|ordered_at>=|ordered_at<|shipped_at!=}
+SHIPPED|2024-04-09|2024-04-10|<null>
+
+[orders]
+{order_no|status|shipped_at}
+A002|RECEIVED|<null>
+A003|CANCELED|<null>
+A004|SHIPPED|2024-04-06 15:00

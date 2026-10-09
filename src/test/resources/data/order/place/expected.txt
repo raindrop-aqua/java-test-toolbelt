@@ -1,0 +1,13 @@
+[orders]
+{order_no|customer_id|status|total_amount|note|shipped_at|ordered_at@|updated_at@}
+A001|C001|RECEIVED|960|<null>|<null>|-|-
+
+[order_item]
+{order_no|line_no|product_code|quantity|amount}
+A001|1|P001|3|360
+A001|2|P002|2|600
+
+[product]
+{product_code|stock}
+P001|97
+P002|48

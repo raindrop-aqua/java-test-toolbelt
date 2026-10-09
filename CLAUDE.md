@@ -20,6 +20,7 @@ Because of how it is distributed, `DbJigu.java` must:
 ```bash
 ./gradlew build                                        # compile + test
 ./gradlew test --tests 'DbJiguTest$パターン番号'          # one nested test class
+./gradlew test --tests '*OrderServiceTest*'              # the guide's examples
 ./gradlew test -Pdbjigu.url=jdbc:postgresql://host:5432/postgres   # override the DB (also dbjigu.user / dbjigu.password)
 ```
 
@@ -53,6 +54,14 @@ Users run DbJigu in Spring Boot + Spring Data JPA projects, so `src/test/java/co
 - `src/test/resources/application.properties` sets the datasource (the same `dbjigu.*` overrides apply) and `ddl-auto=none`.
 - Spring Boot's naming strategy rewrites even explicit `@Column` names (`MemberId` becomes `member_id`), so entity mappings use the lowercase PostgreSQL names.
 - When you change the README's Spring example, keep it consistent with this test and with the Javadoc example in `DbJigu.java`.
+
+## Guide and its example
+
+`docs/guide.ja.md` (Japanese) and `docs/guide.md` (English) are the guide for people writing tests with DbJigu. Keep the two in sync.
+
+- Every fixture and test shown in the guide is a real file under `src/test`: `example/OrderServiceTest` and `OrderService` (order management, plain JDBC), `src/test/resources/schema/order.sql`, and `src/test/resources/data/order/`. When you change one, update the guide so the quoted code and fixtures stay identical.
+- The Spring section quotes `spring/DbJiguSpringExampleTest`.
+- When DbJigu's behavior, fixture format, or error messages change, update the guide as well as the README and Javadoc.
 
 ## Code review
 

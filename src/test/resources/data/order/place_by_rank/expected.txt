@@ -1,0 +1,9 @@
+[orders]
+{#|order_no|customer_id|total_amount}
+1|A001|C001|2700
+2|A001|C001|2850
+3|A001|C001|3000
+
+[product]
+{#|product_code|stock}
+|P002|40

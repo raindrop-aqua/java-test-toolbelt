@@ -18,4 +18,4 @@
 - [ ] 受け取った `Connection` のコミット、ロールバック、クローズをしていない
 - [ ] エラーを握りつぶさず、例外を投げている
 - [ ] 動作が変わる場合、バージョンを更新した（Javadoc と `build.gradle`）
-- [ ] Javadoc、`README.md`、`README.ja.md`、`CLAUDE.md` を更新した（不要なら外す）
+- [ ] Javadoc、`README.md`、`README.ja.md`、`docs/guide.md`、`docs/guide.ja.md`、`CLAUDE.md` を更新した（不要なら外す）

@@ -1,0 +1,9 @@
+[customer]
+{#|customer_id|customer_name|customer_rank}
+1|C001|山田 太郎|GOLD
+2|C001|山田 太郎|SILVER
+3|C001|山田 太郎|REGULAR
+
+[product]
+{product_code|product_name|unit_price|stock}
+P002|ノート|300|50

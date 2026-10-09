@@ -6,6 +6,8 @@
 
 JAR では配布しません。[`DbJigu.java`](src/test/java/com/prism7/testtoolbelt/DbJigu.java) を利用するプロジェクトのテストソース（例：`src/test/java/<パッケージ>/utils`）にコピーし、パッケージ名を変更して使います。必要なのは Java 17 以上と JDBC ドライバだけです。
 
+DbJigu を使ったテストの書き方は、例を使って順を追って説明した [テスト実装ガイド](docs/guide.ja.md) を参照してください。
+
 ## 使い方
 
 ```java
