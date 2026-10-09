@@ -133,9 +133,8 @@ public class DbJigu {
                 }
             }
             int[] types = resolveTypes(section);
-            String sql = "INSERT INTO " + section.tableName
-                    + " (" + section.columns.stream().map(c -> c.name).collect(Collectors.joining(", "))
-                    + ") VALUES (" + section.columns.stream().map(c -> "?").collect(Collectors.joining(", ")) + ")";
+            String sql = "INSERT INTO " + section.tableName + " (" + columnList(section)
+                    + ") VALUES (" + String.join(", ", Collections.nCopies(section.columns.size(), "?")) + ")";
             try (PreparedStatement ps = connection.prepareStatement(sql)) {
                 for (Row row : section.rows) {
                     for (int i = 0; i < row.values.size(); i++) {
@@ -182,11 +181,7 @@ public class DbJigu {
      * @param patterns 対象のパターン番号（省略時は全行）
      */
     public void assertExists(String filePath, int... patterns) {
-        List<String> failures = verify(filePath, true, patterns);
-        if (!failures.isEmpty()) {
-            throw new AssertionError("DBに存在しない行があります: " + filePath + System.lineSeparator()
-                    + String.join(System.lineSeparator(), failures));
-        }
+        assertVerified(filePath, true, "DBに存在しない行があります: ", patterns);
     }
 
     /**
@@ -196,9 +191,14 @@ public class DbJigu {
      * @param patterns 対象のパターン番号（省略時は全行）
      */
     public void assertNotExists(String filePath, int... patterns) {
-        List<String> failures = verify(filePath, false, patterns);
+        assertVerified(filePath, false, "DBに存在する行があります: ", patterns);
+    }
+
+    // 検証を行い、期待と異なった行があれば AssertionError を投げる
+    private void assertVerified(String filePath, boolean expectExists, String message, int... patterns) {
+        List<String> failures = verify(filePath, expectExists, patterns);
         if (!failures.isEmpty()) {
-            throw new AssertionError("DBに存在する行があります: " + filePath + System.lineSeparator()
+            throw new AssertionError(message + filePath + System.lineSeparator()
                     + String.join(System.lineSeparator(), failures));
         }
     }
@@ -346,8 +346,7 @@ public class DbJigu {
 
     // 列の型をDBのメタデータから取得する
     private int[] resolveTypes(Section section) {
-        String sql = "SELECT " + section.columns.stream().map(c -> c.name).collect(Collectors.joining(", "))
-                + " FROM " + section.tableName + " WHERE 1 = 0";
+        String sql = "SELECT " + columnList(section) + " FROM " + section.tableName + " WHERE 1 = 0";
         try (Statement statement = connection.createStatement();
              ResultSet rs = statement.executeQuery(sql)) {
             ResultSetMetaData metaData = rs.getMetaData();
@@ -359,6 +358,10 @@ public class DbJigu {
         } catch (SQLException e) {
             throw new IllegalStateException("列の型を取得できません: " + sql, e);
         }
+    }
+
+    private static String columnList(Section section) {
+        return section.columns.stream().map(Column::name).collect(Collectors.joining(", "));
     }
 
     // 値を列の型に合わせて変換し、バインドする
@@ -407,14 +410,11 @@ public class DbJigu {
     }
 
     private static boolean parseBoolean(String value) {
-        switch (value.toLowerCase(Locale.ROOT)) {
-            case "true", "t", "1", "yes", "y":
-                return true;
-            case "false", "f", "0", "no", "n":
-                return false;
-            default:
-                throw new IllegalArgumentException("真偽値ではありません: " + value);
-        }
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "true", "t", "1", "yes", "y" -> true;
+            case "false", "f", "0", "no", "n" -> false;
+            default -> throw new IllegalArgumentException("真偽値ではありません: " + value);
+        };
     }
 
     // ファイルを読み込み、対象のパターンの行だけを持つセクションの一覧を返す
@@ -499,7 +499,7 @@ public class DbJigu {
         if (columns.isEmpty()) {
             throw formatError(filePath, lineNumber, "列名がありません");
         }
-        return new Section(tableName, columns, hasPattern, lineNumber);
+        return new Section(tableName, columns, hasPattern, lineNumber, new ArrayList<>());
     }
 
     private static Row parseRow(String filePath, int lineNumber, Section section, String line) {
@@ -522,33 +522,21 @@ public class DbJigu {
             throw formatError(filePath, lineNumber,
                     "列数(" + section.columns.size() + ")と値の数(" + values.size() + ")が一致しません");
         }
-        List<String> converted = values.stream().map(v -> v.equals(NULL_VALUE) ? null : v)
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<String> converted = values.stream().map(v -> v.equals(NULL_VALUE) ? null : v).toList();
         return new Row(lineNumber, line, rowPatterns, converted);
     }
 
     // 区切り文字で分割し、各項目の前後の空白を除く（末尾の空の項目も残す）
     private static List<String> split(String line) {
-        return Arrays.stream(line.split(Pattern.quote(SEPARATOR), -1)).map(String::trim).collect(Collectors.toList());
+        return Arrays.stream(line.split(Pattern.quote(SEPARATOR), -1)).map(String::trim).toList();
     }
 
     private static IllegalArgumentException formatError(String filePath, int lineNumber, String message) {
         return new IllegalArgumentException(filePath + ":" + lineNumber + " " + message);
     }
 
-    private static final class Section {
-        final String tableName;
-        final List<Column> columns;
-        final boolean hasPattern;
-        final int headerLineNumber;
-        final List<Row> rows = new ArrayList<>();
-
-        Section(String tableName, List<Column> columns, boolean hasPattern, int headerLineNumber) {
-            this.tableName = tableName;
-            this.columns = columns;
-            this.hasPattern = hasPattern;
-            this.headerLineNumber = headerLineNumber;
-        }
+    private record Section(String tableName, List<Column> columns, boolean hasPattern, int headerLineNumber,
+                           List<Row> rows) {
     }
 
     // 列名の末尾の記号と、比較の条件
