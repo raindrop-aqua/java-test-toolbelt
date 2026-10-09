@@ -1,0 +1,12 @@
+[orders]
+{order_no|status|note%|updated_at>}
+A001|CANCELED|キャンセル: お客様都合|2024-04-01 10:00
+
+[order_item]
+{order_no|line_no}
+A002|1
+
+[product]
+{product_code|stock}
+P001|99
+P002|50

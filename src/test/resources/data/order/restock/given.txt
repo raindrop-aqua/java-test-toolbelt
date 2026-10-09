@@ -1,0 +1,4 @@
+[product]
+{product_code|product_name|unit_price|stock}
+P001|ボールペン|120|100
+P002|ノート|300|50
