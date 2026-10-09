@@ -79,7 +79,7 @@ class DbJiguTest {
 
         assertEquals(1, jigu.verifyExists(DATA + "sample.txt"));
         AssertionError error = assertThrows(AssertionError.class, () -> jigu.assertExists(DATA + "sample.txt"));
-        assertTrue(error.getMessage().contains("sample.txt:12 [Member] 2;sam"), error.getMessage());
+        assertTrue(error.getMessage().contains("sample.txt:12 [Member] 2|sam"), error.getMessage());
     }
 
     @Nested
@@ -122,7 +122,7 @@ class DbJiguTest {
 
         @Test
         void パターン番号が数値でなければエラーにする(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "{#;MemberId;MemberName}", "a;1;john");
+            String file = write(dir, "[Member]", "{#|MemberId|MemberName}", "a|1|john");
             assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
         }
     }
@@ -169,7 +169,7 @@ class DbJiguTest {
         @Test
         void NULLと値は区別して検証する(@TempDir Path dir) {
             jigu.importFrom(DATA + "types.txt");
-            String file = write(dir, "[TestTable]", "{numeric_column;clob_column}", "2;<null>", "3;<null>");
+            String file = write(dir, "[TestTable]", "{numeric_column|clob_column}", "2|<null>", "3|<null>");
             // 3 の clob_column は空文字なので存在しない
             assertEquals(1, jigu.verifyExists(file));
         }
@@ -187,14 +187,14 @@ class DbJiguTest {
 
         @Test
         void 列数と値の数が合わなければエラーにする(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "{MemberId;MemberName}", "1;john;extra");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "1|john|extra");
             IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
             assertTrue(error.getMessage().endsWith(":3 列数(2)と値の数(3)が一致しません"), error.getMessage());
         }
 
         @Test
         void 列名の前にデータがあればエラーにする(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "1;john");
+            String file = write(dir, "[Member]", "1|john");
             assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
         }
 
@@ -205,7 +205,7 @@ class DbJiguTest {
 
         @Test
         void 検証対象の行が無ければエラーにする(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "{MemberId;MemberName}");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}");
             assertThrows(IllegalArgumentException.class, () -> jigu.verifyExists(file));
         }
 

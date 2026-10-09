@@ -13,7 +13,7 @@ Because of how it is distributed, `DbJigu.java` must:
 - keep working on several databases. The main target is PostgreSQL, and Oracle should keep working too, because it has been used there. Avoid DB-specific SQL.
 - never commit, roll back, or close the `Connection` it is given. In Spring tests, callers pass `DataSourceUtils.getConnection(dataSource)` so the test transaction can roll back.
 - throw on errors instead of swallowing them, so that a mistake can never pass silently.
-- record its version in the class Javadoc (`v1.0.0`). Bump it when behavior changes so users can tell which version they copied.
+- record its version in the class Javadoc (`v2.0.0`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
 
 ## Commands
 
@@ -29,12 +29,12 @@ The Javadoc in `DbJigu.java` is the user-facing spec, so keep it up to date.
 
 ```
 [TableName]
-{#;col1;col2@}
-1,2;val1;val2
-;val1;<null>
+{#|col1|col2@}
+1,2|val1|val2
+|val1|<null>
 ```
 
-- Files are UTF-8 and the separator is `;`. All fields are trimmed, and trailing empty fields are kept (`split(";", -1)`). `<null>` means NULL.
+- Files are UTF-8 and the separator is `|`. All fields are trimmed, and trailing empty fields are kept (`split(Pattern.quote("|"), -1)`; `split` takes a regex, so the separator must be quoted). `<null>` means NULL.
 - A header that starts with `#` makes the first field of each row its pattern numbers (comma-separated). An empty pattern field means the row belongs to every pattern. When patterns are passed to a method, it handles only rows in those patterns plus the common rows. Passing a pattern that no row uses is an error.
 - A column name ending in `@` is left out of comparison but is still imported.
 - Values are converted according to the column's JDBC type, which is read from `ResultSetMetaData` of `SELECT cols FROM table WHERE 1 = 0`. Plain `setString` fails on PostgreSQL for date and numeric columns. CHAR columns are compared using `RTRIM(col)`. LOB columns (CLOB, NCLOB, LONGVARCHAR) are left out of the WHERE clause and compared in Java, because Oracle cannot compare CLOBs with `=`. PostgreSQL `text` is reported as VARCHAR, so the LOB path is not exercised by the current tests.

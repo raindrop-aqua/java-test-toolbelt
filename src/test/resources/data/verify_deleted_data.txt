@@ -1,5 +1,5 @@
 [TestTable]
-{numeric_column;string_column;date_column;timestamp_column;clob_column@}
-123.45;String1;2024-04-01;2024-04-01 12:34:56;比較しない
-234.56;String2;2024-04-02;2024-04-02 12:34:56;比較しない
-456.78;String4;2024-04-04;2024-04-04 12:34:56;比較しない
+{numeric_column|string_column|date_column|timestamp_column|clob_column@}
+123.45|String1|2024-04-01|2024-04-01 12:34:56|比較しない
+234.56|String2|2024-04-02|2024-04-02 12:34:56|比較しない
+456.78|String4|2024-04-04|2024-04-04 12:34:56|比較しない
