@@ -13,7 +13,7 @@ Because of how it is distributed, `DbJigu.java` must:
 - keep working on several databases. The main target is PostgreSQL, and Oracle should keep working too, because it has been used there. Avoid DB-specific SQL.
 - never commit, roll back, or close the `Connection` it is given. In Spring tests, callers pass `DataSourceUtils.getConnection(dataSource)` so the test transaction can roll back.
 - throw on errors instead of swallowing them, so that a mistake can never pass silently.
-- record its version in the class Javadoc (`v2.1.0`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
+- record its version in the class Javadoc (`v2.1.1`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
 
 ## Commands
 

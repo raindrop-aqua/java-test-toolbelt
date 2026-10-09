@@ -178,7 +178,51 @@ class DbJiguTest {
         void 型に変換できない値はエラーにする(@TempDir Path dir) {
             String file = write(dir, "[TestTable]", "{numeric_column}", "abc");
             IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
-            assertTrue(error.getMessage().contains("行3"), error.getMessage());
+            assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
+        }
+
+        @Test
+        void 浮動小数点の列は投入した値で検証できる(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]", "{real_column|double_column}", "1.1|0.1", "3.14159|2.5e-3");
+            jigu.importFrom(file);
+            jigu.assertExists(file);
+        }
+
+        @Test
+        void 浮動小数点の列はSQLで投入した値とも一致する(@TempDir Path dir) {
+            update("INSERT INTO TestTable (real_column, double_column) VALUES (1.1, 0.1)");
+            jigu.assertExists(write(dir, "[TestTable]", "{real_column|double_column}", "1.1|0.1"));
+        }
+
+        @Test
+        void 浮動小数点の範囲外の値はエラーにする(@TempDir Path dir) {
+            for (String line : List.of("1e40|1", "1e-50|1", "1|1e400", "1.5f|1")) {
+                String file = write(dir, "[TestTable]", "{real_column|double_column}", line);
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> jigu.importFrom(file), line);
+                assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
+            }
+        }
+
+        @Test
+        void 存在しない日付は時刻があってもエラーにする(@TempDir Path dir) {
+            for (String[] columnAndValue : List.of(
+                    new String[]{"timestamp_column", "2024-02-30 12:00"},
+                    new String[]{"date_column", "2024-02-31 00:00"})) {
+                String file = write(dir, "[TestTable]", "{" + columnAndValue[0] + "}", columnAndValue[1]);
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> jigu.importFrom(file));
+                assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
+            }
+        }
+
+        @Test
+        void 検証のSQLエラーにはファイル名と行番号を含める(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{MemberId|MemberName>=}", "1|a", "2|b");
+            // 列の型は取得できるが、比較できない演算子にするため varchar の列を json 型に変える
+            update("ALTER TABLE Member ALTER COLUMN MemberName TYPE json USING to_json(MemberName)");
+            IllegalStateException error = assertThrows(IllegalStateException.class, () -> jigu.verifyExists(file));
+            assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
         }
     }
 
@@ -292,6 +336,24 @@ class DbJiguTest {
         }
 
         @Test
+        void 列名の無いテーブルがあればエラーにする(@TempDir Path dir) {
+            String atEnd = write(dir, "[TestTable]", "{string_column}", "x", "[NoSuchTable]");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(atEnd));
+            assertTrue(error.getMessage().startsWith(atEnd + ":4 "), error.getMessage());
+
+            String inMiddle = write(dir, "[Member]", "[TestTable]", "{string_column}", "x");
+            error = assertThrows(IllegalArgumentException.class, () -> jigu.verifyExists(inMiddle));
+            assertTrue(error.getMessage().startsWith(inMiddle + ":1 "), error.getMessage());
+        }
+
+        @Test
+        void 書式エラーでは区切り文字を案内する(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{MemberId|MemberName");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().contains("{列名1|列名2}"), error.getMessage());
+        }
+
+        @Test
         void 列名の前にデータがあればエラーにする(@TempDir Path dir) {
             String file = write(dir, "[Member]", "1|john");
             assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
@@ -311,7 +373,8 @@ class DbJiguTest {
         @Test
         void テーブルが無ければエラーにする(@TempDir Path dir) {
             String file = write(dir, "[NoSuchTable]", "{id}", "1");
-            assertThrows(IllegalStateException.class, () -> jigu.importFrom(file));
+            IllegalStateException error = assertThrows(IllegalStateException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().startsWith(file + ":2 "), error.getMessage());
         }
     }
 
