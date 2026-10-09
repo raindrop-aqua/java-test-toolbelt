@@ -26,7 +26,7 @@ Every example in this guide is a real, passing test. The code is in [OrderServic
 2. Change the `package` line at the top of the file to match where you copied it.
 3. Make sure the JDBC driver for your database is a test dependency.
 
-All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.1.1`) tells you which version you copied.
+All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.1.2`) tells you which version you copied.
 
 ### 1.2 API at a glance
 
@@ -179,9 +179,10 @@ value1|<null>|value3
 
 | Column type | Examples |
 |---|---|
-| Number | `120` `123.45` `2.5e-3` |
+| Number | `120` `123.45` `2.5e-3` (a decimal in an integer-type column such as `INTEGER` is an error; for `NUMERIC(10)` or Oracle `NUMBER` columns, the database rounds it) |
 | Date | `2024-04-01` `2024/04/01` |
 | Timestamp | `2024-04-01 10:00` `2024-04-01 10:00:30` `2024-04-01 10:00:30.123` |
+| Time | `10:00` `10:00:30` |
 | Boolean | `true` `false` (also `t` `f` `1` `0` `yes` `no` `y` `n`) |
 
 - When importing, columns you leave out get the DB default (NULL if there is no default).
@@ -701,6 +702,13 @@ Error messages are in Japanese and start with `file:line`.
 | `投入では同じ列を2回書けません` | A file that repeats a column (for a range) is being used for import. |
 | `% は文字列の列だけに使えます` | `%` is on a number or date column. |
 | `列名の末尾の記号は1つだけ付けられます` | A column has two marks, as in `amount@<`. |
+| `LOB 列は大小比較できません` | `<` `<=` `>` or `>=` is on a LOB column such as a CLOB. |
+| `パターン番号が数値ではありません` | The pattern field contains something other than numbers, such as `a` or `1,,2`. |
+| `テーブル名は [テーブル名] の形式で記述してください` | A line starting with `[` does not end with `]`, or the table name is empty (`[]` or `[ ]`). |
+| `列名は {列名1\|列名2} の形式で記述してください` | A line starting with `{` does not end with `}`. |
+| `空の列名があります` / `列名がありません` | The column list has an empty name (as in `{a\|\|b}`) or no names at all. |
+| `検証に失敗しました` | The verification SQL failed. Check that no ordering mark such as `>` is on a column type that cannot be compared. The exception includes the SQL error. |
+| `ファイルを読み込めません` | The file path is wrong. Paths are relative to the project root. |
 
 ### 7.3 It should match but fails
 

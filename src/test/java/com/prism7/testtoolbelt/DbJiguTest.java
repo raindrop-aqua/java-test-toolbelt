@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -225,6 +226,76 @@ class DbJiguTest {
         }
 
         @Test
+        void 整数の列に小数を書くとエラーにする(@TempDir Path dir) throws SQLException {
+            String file = write(dir, "[TestTable]", "{integer_column}", "1.5");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
+
+            // 小数点以下が0なら整数として投入する
+            jigu.importFrom(write(dir, "[TestTable]", "{integer_column}", "2.0"));
+            assertEquals("2", queryString("SELECT integer_column FROM TestTable"));
+        }
+
+        @Test
+        void 時刻は秒を省略できる(@TempDir Path dir) throws SQLException {
+            String file = write(dir, "[TestTable]", "{string_column|time_column}", "a|12:34", "b|23:59:59", "c|9:05");
+            jigu.importFrom(file);
+            assertEquals("12:34:00", queryString("SELECT time_column FROM TestTable WHERE string_column = 'a'"));
+            jigu.assertExists(file);
+            jigu.assertExists(write(dir, "[TestTable]", "{time_column}", "12:34:00"));
+        }
+
+        @Test
+        void 時刻の書式が誤っていればエラーにする(@TempDir Path dir) {
+            for (String value : List.of("12", "24:00", "12:34:56.789", "12:34:60")) {
+                String file = write(dir, "[TestTable]", "{time_column}", value);
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> jigu.importFrom(file), value);
+                assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
+            }
+        }
+
+        @Test
+        void UUIDなどの型はDBに変換を任せる(@TempDir Path dir) {
+            String file = write(dir, "[TestTable]", "{uuid_column}", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
+            jigu.importFrom(file);
+            jigu.assertExists(file);
+
+            String invalid = write(dir, "[TestTable]", "{uuid_column}", "not-a-uuid");
+            IllegalStateException error = assertThrows(IllegalStateException.class, () -> jigu.importFrom(invalid));
+            assertTrue(error.getMessage().startsWith(invalid + ":2 "), error.getMessage());
+        }
+
+        // PostgreSQL の text は VARCHAR として報告され、LOB 列の経路を通らないため、Java 側の比較を直接呼んで確かめる
+        @ParameterizedTest(name = "{0}: ファイル={1} DB={2} → {3}")
+        @CsvSource(delimiter = '|', nullValues = "<null>", textBlock = """
+                EQUAL     | abc    | abc    | true
+                EQUAL     | abc    | abd    | false
+                EQUAL     | abc    | <null> | false
+                EQUAL     | <null> | <null> | true
+                EQUAL     | <null> | abc    | false
+                NOT_EQUAL | abc    | abd    | true
+                NOT_EQUAL | abc    | abc    | false
+                NOT_EQUAL | abc    | <null> | true
+                NOT_EQUAL | <null> | abc    | true
+                NOT_EQUAL | <null> | <null> | false
+                PREFIX    | ab     | abc    | true
+                PREFIX    | bc     | abc    | false
+                PREFIX    | ab     | <null> | false
+                PREFIX    | <null> | <null> | true
+                """)
+        void LOB列はJava側で比較する(String operatorName, String expected, String actual, boolean matches)
+                throws ReflectiveOperationException {
+            Class<?> operatorClass = Class.forName(DbJigu.class.getName() + "$Operator");
+            Object operator = Arrays.stream(operatorClass.getEnumConstants())
+                    .filter(o -> ((Enum<?>) o).name().equals(operatorName))
+                    .findFirst().orElseThrow();
+            Method method = DbJigu.class.getDeclaredMethod("matchesInJava", operatorClass, String.class, String.class);
+            method.setAccessible(true);
+            assertEquals(matches, method.invoke(null, operator, expected, actual));
+        }
+
+        @Test
         void 検証のSQLエラーにはファイル名と行番号を含める(@TempDir Path dir) {
             String file = write(dir, "[Member]", "{MemberId|MemberName>=}", "1|a", "2|b");
             // 列の型は取得できるが、比較できない演算子にするため varchar の列を json 型に変える
@@ -362,9 +433,28 @@ class DbJiguTest {
         }
 
         @Test
+        void テーブル名の書式が誤っていればエラーにする(@TempDir Path dir) {
+            for (String tableLine : List.of("[", "[]", "[ ]", "[Member")) {
+                String file = write(dir, tableLine, "{MemberId}", "1");
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> jigu.importFrom(file), tableLine);
+                assertTrue(error.getMessage().endsWith(":1 テーブル名は [テーブル名] の形式で記述してください"),
+                        error.getMessage());
+            }
+        }
+
+        @Test
         void 列名の前にデータがあればエラーにする(@TempDir Path dir) {
             String file = write(dir, "[Member]", "1|john");
             assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+        }
+
+        @Test
+        void 先頭のBOMは無視する(@TempDir Path dir) throws IOException {
+            Path file = dir.resolve("bom.txt");
+            Files.writeString(file, "\uFEFF[Member]\n{MemberId|MemberName}\n1|john\n", StandardCharsets.UTF_8);
+            assertEquals(1, jigu.importFrom(file.toString()));
+            jigu.assertExists(file.toString());
         }
 
         @Test
@@ -391,6 +481,14 @@ class DbJiguTest {
             return statement.executeUpdate(sql);
         } catch (SQLException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    private String queryString(String sql) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            assertTrue(rs.next(), sql);
+            return rs.getString(1);
         }
     }
 

@@ -70,7 +70,7 @@ class MemberServiceTest {
 | `<null>` | NULL |
 
 - 文字コードは UTF-8、区切り文字は `|` です。各項目の前後の空白は取り除きます。
-- 値は列の型に合わせて変換します。日付は `2024-04-01` または `2024/04/01`、日時は `2024-04-01 12:34:56[.fff]` の形式で書きます。
+- 値は列の型に合わせて変換します。日付は `2024-04-01` または `2024/04/01`、日時は `2024-04-01 12:34:56[.fff]`、時刻は `12:34[:56]` の形式で書きます。`INTEGER` や `BIGINT` などの整数型の列に小数を書くとエラーになります（`NUMERIC(10)` や Oracle の `NUMBER` の列は DB が丸めます）。
 - パターン番号を指定すると、そのパターンの行と共通の行だけを処理します。指定しなければ全行を処理します。どの行にもないパターン番号を指定するとエラーになります。
 - LOB 列（Oracle の CLOB など）は、SQL ではなく Java 側で比較します。
 
@@ -100,8 +100,24 @@ A001|100|200|CANCELED|特急|-
 
 ## 開発
 
-テストは PostgreSQL で実行します。DB の準備は [CLAUDE.md](CLAUDE.md) を参照してください。
+テストは PostgreSQL 17 に接続して実行します。テーブルはテストのトランザクション内で作成し、終了時にロールバックするため、DB には何も残りません。
 
-```bash
-./gradlew build
-```
+1. PostgreSQL 17 を用意します。データベース、ユーザー、パスワードはいずれも `postgres` です。Docker なら次のように起動できます。
+
+   ```bash
+   docker run -d --name dbjigu-postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:17
+   ```
+
+2. テストを実行します。既定の接続先は `jdbc:postgresql://192.168.64.2:5432/postgres`（メンテナの環境）なので、`-P` で接続先を指定します。
+
+   ```bash
+   ./gradlew build -Pdbjigu.url=jdbc:postgresql://localhost:5432/postgres
+   ```
+
+   ユーザーとパスワードも `-Pdbjigu.user=...` と `-Pdbjigu.password=...` で変えられます。特定のテストだけ実行するには `--tests` を使います（例：`./gradlew test --tests '*OrderServiceTest*'`）。
+
+GitHub Actions でも、プルリクエストと `main` へのプッシュのたびに同じテストを実行します（[.github/workflows/build.yml](.github/workflows/build.yml)）。
+
+## ライセンス
+
+[MIT License](LICENSE) です。`DbJigu.java` をコピーして使う場合は、ファイル先頭の著作権表示を残してください。
