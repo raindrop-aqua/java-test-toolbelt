@@ -12,7 +12,7 @@ To learn how to write tests with DbJigu, step by step with a worked example, rea
 
 ```java
 DbJigu jigu = new DbJigu(connection);   // in Spring tests: DataSourceUtils.getConnection(dataSource)
-jigu.importFrom("src/test/resources/data/setup.txt", 1);       // import pattern 1
+jigu.importFrom("src/test/resources/data/setup.txt", 1);       // import pattern 1 (or a name: "gold")
 // ... run the code under test (with JPA, call entityManager.flush() first) ...
 jigu.assertExists("src/test/resources/data/expected.txt", 1);  // throws AssertionError on mismatch
 jigu.assertNotExists("src/test/resources/data/deleted.txt");
@@ -66,13 +66,14 @@ For a working example, see [DbJiguSpringExampleTest](src/test/java/com/prism7/te
 |---|---|
 | `[TableName]` | Starts a table section. A file can contain several sections. |
 | `{col1\|col2}` | Column names. A name ending in `@` is imported but not compared. |
-| `#` as the first column | The first field of each row lists the row's pattern numbers (`1,2`). An empty field means the row belongs to all patterns. |
+| `#` as the first column | The first field of each row lists the row's pattern numbers (`1,2`) or names (`gold,silver`). An empty field means the row belongs to all patterns. |
 | `<null>` | NULL. |
 | `// comment` | A line starting with `//` is ignored. A comment cannot start in the middle of a line. |
 
 - Files are UTF-8, the separator is `|`, and every field is trimmed.
 - Values are converted to each column's type. Dates are written as `2024-04-01` or `2024/04/01`, timestamps as `2024-04-01 12:34:56[.fff]`, and times as `12:34[:56]`. A decimal in an integer-type column such as `INTEGER` or `BIGINT` is an error (for `NUMERIC(10)` or Oracle `NUMBER` columns, the database rounds it).
-- If you pass pattern numbers, only rows in those patterns and the common rows are processed. If you pass none, every row is processed. Passing a pattern number that no row uses is an error.
+- If you pass pattern numbers (`int`) or names (`String`), only rows in those patterns and the common rows are processed. If you pass none, every row is processed. Passing a pattern that no row uses is an error.
+- Names ignore case (`Gold` and `gold` are the same), and anything that reads as a number is compared as a number (`01`, `+1`, and a full-width `１` are the same as `1`). Names can't contain `|` or `,`.
 - LOB columns (such as Oracle CLOB) are compared in Java rather than in SQL.
 
 ### Comparison conditions
@@ -105,7 +106,7 @@ A001|100|200|CANCELED|Express|-
 
 - Edit each table as a grid, then save it. The row and column buttons (move, add, duplicate, comment out, delete) can be hidden with "行・列の操作" (row and column tools) in the toolbar.
 - With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
-- It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or a pattern number that isn't a number) and shows the line numbers.
+- It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or an empty pattern number such as `1,,2`) and shows the line numbers.
 - Choose a pattern number to dim the rows that are not part of it, and see how many rows each table has per pattern.
 - Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.
 - In Chrome and Edge, it saves back to the file you opened. Other browsers download the file instead.

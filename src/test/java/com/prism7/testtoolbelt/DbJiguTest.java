@@ -130,9 +130,61 @@ class DbJiguTest {
         }
 
         @Test
-        void パターン番号が数値でなければエラーにする(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "{#|MemberId|MemberName}", "a|1|john");
-            assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+        void 空のパターン番号はエラーにする(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{#|MemberId|MemberName}", "1,,2|1|john");
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(file));
+            assertTrue(error.getMessage().contains(":3 空のパターン番号があります: 1,,2"), error.getMessage());
+        }
+
+        @ParameterizedTest(name = "{0} → {1}", quoteTextArguments = false)
+        @CsvSource(delimiter = '|', textBlock = """
+                gold        | common,john,both
+                SILVER      | common,sam,both
+                +1          | common,mike
+                gold,1      | common,john,both,mike
+                """)
+        void パターン番号に名前を使える(String patternText, String expectedNames) {
+            String[] patterns = patternText.split(",");
+            List<String> expected = List.of(expectedNames.split(","));
+
+            assertEquals(expected.size(), jigu.importFrom(DATA + "pattern_names.txt", patterns));
+            assertEquals(expected, memberNames());
+            jigu.assertExists(DATA + "pattern_names.txt", patterns);
+        }
+
+        @Test
+        void 数値として読める名前は数値として比べる() {
+            // ファイルの 01 は、数値の 1 とも文字列の "1" とも一致する
+            assertEquals(2, jigu.importFrom(DATA + "pattern_names.txt", 1));
+            jigu.assertExists(DATA + "pattern_names.txt", "1");
+            // silver の sam と both は投入していない。共通の行（common）は投入したので1件
+            assertEquals(1, jigu.verifyNotExists(DATA + "pattern_names.txt", "silver"));
+        }
+
+        @Test
+        void 全角の数字も数値として比べる(@TempDir Path dir) {
+            // 以前の Integer.parseInt と同じく、全角の １ はパターン 1 と同じ
+            String file = write(dir, "[Member]", "{#|MemberId|MemberName}", "1|1|a", "１|2|b");
+            assertEquals(2, jigu.importFrom(file, 1));
+            assertEquals(0, jigu.verifyExists(file, "1"));
+        }
+
+        @Test
+        void 存在しない名前はエラーにする() {
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> jigu.verifyExists(DATA + "pattern_names.txt", "gold", "Bronze"));
+            assertTrue(error.getMessage().contains("パターン番号 [Bronze] の行がありません"), error.getMessage());
+        }
+
+        @Test
+        void 名前に使えない値を渡すとエラーにする() {
+            for (String bad : new String[] {"", " ", "gold,silver", "a|b", null}) {
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> jigu.importFrom(DATA + "pattern_names.txt", bad), String.valueOf(bad));
+                assertTrue(error.getMessage().startsWith("パターン番号に使えない値です"), error.getMessage());
+            }
+            assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(DATA + "pattern_names.txt", (String[]) null));
+            assertThrows(IllegalArgumentException.class, () -> jigu.importFrom(DATA + "pattern_names.txt", (int[]) null));
         }
     }
 

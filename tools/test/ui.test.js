@@ -110,6 +110,14 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.deepEqual(result.steps.fixed, { status: '✓ 問題なし', text: '[t]\n{a|b|c}\n 1| |\n' });
   });
 
+  test('パターン番号の名前で絞り込む', () => {
+    assert.deepEqual(result.steps.namedFilter, {
+      options: [['', 'すべて'], ['2', '02'], ['gold', 'Gold'], ['silver', 'SILVER']],
+      dimRows: 1,
+    });
+    assert.equal(result.steps.namedAddRow, '[t]\n{#          |a}\n Gold       |1\n gold,SILVER|2\n            |3\n 02         |4\n Gold       |\n');
+  });
+
   test('書式の誤りがあると、テキストのまま誤りを表示する', () => {
     assert.equal(result.steps.fatal.mode, 'text');
     assert.match(result.steps.fatal.issues, /データの前に \{列名1\|列名2\} を記述してください/);

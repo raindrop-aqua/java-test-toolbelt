@@ -26,7 +26,7 @@ Every example in this guide is a real, passing test. The code is in [OrderServic
 2. Change the `package` line at the top of the file to match where you copied it.
 3. Make sure the JDBC driver for your database is a test dependency.
 
-All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.2.0`) tells you which version you copied.
+All you need is Java 17 or later and a JDBC driver. The version at the top of the Javadoc (for example `v2.3.0`) tells you which version you copied.
 
 ### 1.2 API at a glance
 
@@ -39,7 +39,7 @@ All you need is Java 17 or later and a JDBC driver. The version at the top of th
 | `verifyNotExists(file, patterns...)` | Same check as `assertNotExists` | Returns the number of rows that were found |
 
 - Usually `importFrom` and `assert*` are all you need. Use `verify*` when you want to check how many rows differ.
-- `patterns` is optional. Without it, every row is used ([3.4](#34-pattern-numbers)).
+- `patterns` is optional. Without it, every row is used. You can pass numbers (`1`) or names (`"gold"`) ([3.4](#34-pattern-numbers)).
 - A mistake in a file or an SQL error throws an exception (such as `IllegalArgumentException`), not an `AssertionError`. A mistake never lets a test pass silently.
 - DbJigu never commits, rolls back, or closes the `Connection` you give it.
 
@@ -270,6 +270,8 @@ P002|ノート|300|50
 |---|---|
 | `1` | Row for pattern 1 |
 | `1,3` | Row for patterns 1 and 3 |
+| `gold` | Row for the pattern named gold |
+| `gold,silver` | Row for the patterns gold and silver |
 | empty (the line starts with `\|`) | Row shared by every pattern |
 | Table without `#` | Always used |
 
@@ -278,6 +280,10 @@ Calling `jigu.importFrom(file, 1)` uses only the rows for pattern 1 and the shar
 - Without pattern numbers, every row is used.
 - Passing a pattern number that no row has is an error, so a typo in the number can never make a test pass without checking anything.
 - You can pass several patterns, as in `jigu.importFrom(file, 1, 3)`.
+- You can write names instead of numbers. Pass a name as a string, as in `jigu.importFrom(file, "gold")` ([4.2](#naming-patterns)).
+- Names ignore case (`Gold` and `gold` are the same pattern). Anything that reads as a number is compared as a number (`01`, `+1`, and a full-width `１` are the same pattern as `1`).
+- Names can't contain `|` or `,`. Spaces around them are removed.
+- A typo such as `1、2` or `1.2` is read as one name, not as patterns 1 and 2. The fixture editor warns about it.
 
 ---
 
@@ -459,6 +465,57 @@ void 会員ランクに応じて割り引く(int pattern, String description) th
 - Pass the **same pattern number** to import and to verify.
 - The stock (`P002` at 40) is the same in every pattern, so its row has an empty pattern field and is shared.
 - `description` is only there for the test name. The result shows names like "パターン1: GOLD は10%引き" (pattern 1: GOLD gets 10% off), so you can see which case failed.
+
+#### Naming patterns
+
+You can write names instead of pattern numbers. Then the file itself shows which case each row is for, and you no longer need an argument (`description`) just for the test name. Here is the same test written with names.
+
+[place_by_rank_named/given.txt](../src/test/resources/data/order/place_by_rank_named/given.txt)
+
+```
+[customer]
+{#|customer_id|customer_name|customer_rank}
+gold|C001|山田 太郎|GOLD
+silver|C001|山田 太郎|SILVER
+regular|C001|山田 太郎|REGULAR
+
+[product]
+{product_code|product_name|unit_price|stock}
+P002|ノート|300|50
+```
+
+[place_by_rank_named/expected.txt](../src/test/resources/data/order/place_by_rank_named/expected.txt)
+
+```
+[orders]
+{#|order_no|customer_id|total_amount}
+gold|A001|C001|2700
+silver|A001|C001|2850
+regular|A001|C001|3000
+
+[product]
+{#|product_code|stock}
+|P002|40
+```
+
+```java
+@ParameterizedTest(name = "{0}", quoteTextArguments = false)
+@ValueSource(strings = {"gold", "silver", "regular"})
+void 会員ランクに応じて割り引く_名前で指定(String rank) throws SQLException {
+    // Given
+    jigu.importFrom(DATA + "place_by_rank_named/given.txt", rank);
+
+    // When
+    service.placeOrder("A001", "C001", List.of(new OrderLine("P002", 10)));
+
+    // Then
+    jigu.assertExists(DATA + "place_by_rank_named/expected.txt", rank);
+}
+```
+
+- Pass names as strings. You can pass several, as in `jigu.importFrom(file, "gold", "silver")`.
+- The test result shows the name you passed, such as `gold`.
+- A misspelled name (such as `"glod"`) is a pattern that no row has, so it is an error.
 
 #### Using column marks
 
@@ -729,7 +786,8 @@ Error messages are in Japanese and start with `file:line`.
 | `% は文字列の列だけに使えます` | `%` is on a number or date column. |
 | `列名の末尾の記号は1つだけ付けられます` | A column has two marks, as in `amount@<`. |
 | `LOB 列は大小比較できません` | `<` `<=` `>` or `>=` is on a LOB column such as a CLOB. |
-| `パターン番号が数値ではありません` | The pattern field contains something other than numbers, such as `a` or `1,,2`. |
+| `空のパターン番号があります` | The pattern field has an empty item, as in `1,,2` or `gold,`. |
+| `パターン番号に使えない値です` | A pattern passed to the method is empty or `null`, or contains `,` or `\|`. |
 | `テーブル名は [テーブル名] の形式で記述してください` | A line starting with `[` does not end with `]`, or the table name is empty (`[]` or `[ ]`). |
 | `列名は {列名1\|列名2} の形式で記述してください` | A line starting with `{` does not end with `}`. |
 | `空の列名があります` / `列名がありません` | The column list has an empty name (as in `{a\|\|b}`) or no names at all. |

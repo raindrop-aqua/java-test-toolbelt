@@ -115,6 +115,22 @@
     q('#issues [data-fix]').click();
     result.steps.fixed = { status: status(), text: text() };
 
+    // パターン番号の名前で絞り込む（大文字と小文字は区別しない）。絞り込み中に追加した行には、そのパターンが入る
+    $('btnText').click();
+    $('text').value = '[t]\n{#|a}\nGold|1\ngold,SILVER|2\n|3\n02|4\n';
+    fire($('text'), 'input');
+    $('btnGrid').click();
+    $('selFilter').value = 'gold';
+    fire($('selFilter'), 'change');
+    result.steps.namedFilter = {
+      options: [...$('selFilter').options].map(o => [o.value, o.textContent]),
+      dimRows: document.querySelectorAll('tr.dim').length,
+    };
+    q('section[data-s="0"] .add-row').click();
+    result.steps.namedAddRow = text();
+    $('selFilter').value = '';
+    fire($('selFilter'), 'change');
+
     // 書式の誤りがあると表に切り替えられない
     $('btnText').click();
     $('text').value = '[t]\n1\n';

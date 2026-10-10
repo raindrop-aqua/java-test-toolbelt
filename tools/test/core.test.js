@@ -73,10 +73,32 @@ test.describe('解析', () => {
     const s = doc.sections[0];
     assert.equal(s.hasPattern, true);
     assert.deepEqual(s.rows.map(r => [r.pattern, r.cells]), [['1,2', ['x']], ['', ['y']]]);
-    assert.deepEqual(C.allPatterns(doc), [1, 2]);
-    assert.equal(C.inPattern(s, s.rows[0], 2), true);
-    assert.equal(C.inPattern(s, s.rows[0], 3), false);
-    assert.equal(C.inPattern(s, s.rows[1], 3), true, '共通の行はどのパターンにも含まれる');
+    assert.deepEqual(C.allPatterns(doc), [{ key: '1', label: '1' }, { key: '2', label: '2' }]);
+    assert.equal(C.inPattern(s, s.rows[0], '2'), true);
+    assert.equal(C.inPattern(s, s.rows[0], '3'), false);
+    assert.equal(C.inPattern(s, s.rows[1], '3'), true, '共通の行はどのパターンにも含まれる');
+  });
+
+  test('パターン番号の名前：大文字と小文字を区別せず、数値として読めるものは数値として比べる（DbJigu と同じ）', () => {
+    assert.equal(C.patternKey('Gold'), 'gold');
+    assert.equal(C.patternKey('01'), '1');
+    assert.equal(C.patternKey('+1'), '1');
+    assert.equal(C.patternKey('-0'), '0');
+    // Java の Integer.parseInt や BigInteger と同じく、Unicode の数字も数値として読む
+    assert.equal(C.patternKey('１２'), '12');
+    assert.equal(C.patternKey('+０１'), '1');
+    assert.equal(C.patternKey('٣'), '3', 'アラビア・インド数字');
+    assert.equal(C.patternKey('𝟗'), '9', '数学用の太字の数字（10個ずつの並びが続く）');
+    const doc = parseOk('[t]\n{#|a}\nGold, 10|x\nsilver,02|y\n01|z\n');
+    const s = doc.sections[0];
+    // 数値を数値の順に先に並べ、名前を後に並べる。表記は最初に書かれたもの
+    assert.deepEqual(C.allPatterns(doc), [
+      { key: '1', label: '01' }, { key: '2', label: '02' }, { key: '10', label: '10' },
+      { key: 'gold', label: 'Gold' }, { key: 'silver', label: 'silver' },
+    ]);
+    assert.equal(C.inPattern(s, s.rows[0], C.patternKey('GOLD')), true);
+    assert.equal(C.inPattern(s, s.rows[2], C.patternKey('1')), true);
+    assert.equal(C.inPattern(s, s.rows[1], C.patternKey('gold')), false);
   });
 
   test('末尾の空の項目を残す', () => {
@@ -147,10 +169,18 @@ test.describe('チェック', () => {
     assert.deepEqual(lintOf('[t]\n{a|b}\n1\n'), [['error', 0, null, '列数(2)と値の数(1)が一致しません']]);
   });
 
-  test('パターン番号が数値ではない', () => {
-    assert.deepEqual(lintOf('[t]\n{#|a}\n1,x|1\n'), [['error', 0, 0, 'パターン番号が数値ではありません: 1,x']]);
-    assert.deepEqual(lintOf('[t]\n{#|a}\n1,,2|1\n'), [['error', 0, 0, 'パターン番号が数値ではありません: 1,,2']]);
-    assert.deepEqual(lintOf('[t]\n{#|a}\n+1, -2|1\n'), [], 'Integer.parseInt と同じく符号を許す');
+  test('空のパターン番号', () => {
+    assert.deepEqual(lintOf('[t]\n{#|a}\n1,,2|1\n'), [['error', 0, 0, '空のパターン番号があります: 1,,2']]);
+    assert.deepEqual(lintOf('[t]\n{#|a}\ngold,|1\n'), [['error', 0, 0, '空のパターン番号があります: gold,']]);
+    assert.deepEqual(lintOf('[t]\n{#|a}\n1,x, gold member|1\n+1, -2|2\n'), [], '名前と符号付きの数値は書ける');
+  });
+
+  test('数字と記号が混じったパターン番号は警告する（区切りの書き間違い）', () => {
+    for (const p of ['1、2', '1.2', '1 2', '1，2']) {
+      assert.deepEqual(lintOf(`[t]\n{#|a}\n${p}|1\n`),
+        [['warn', 0, 0, 'パターン番号に数字と記号が混じっています（複数のパターンは , で区切ります）: ' + p]], p);
+    }
+    assert.deepEqual(lintOf('[t]\n{#|a}\ncase1,case_2|1\n'), [], '記号の無い名前は警告しない');
   });
 
   test('列名の誤り', () => {

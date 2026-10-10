@@ -276,7 +276,7 @@ body.dragging #dropHint { display: flex; }
           <li><code>[テーブル]</code> の次の行に <code>{列1|列2}</code>、その後に値の行。</li>
           <li><code>&lt;null&gt;</code> は NULL。何も書かなければ空文字。</li>
           <li>列名の記号（検証のとき）：<code>@</code> 比較しない、<code>&lt; &lt;= &gt; &gt;=</code> 大小、<code>!=</code> 等しくない、<code>%</code> 前方一致。投入では無視される。</li>
-          <li>「パターン列」を有効にすると、各行の先頭がパターン番号（<code>1,2</code>）になる。空なら全パターン共通。</li>
+          <li>「パターン列」を有効にすると、各行の先頭がパターン番号（<code>1,2</code> や <code>gold,silver</code>）になる。空なら全パターン共通。名前の大文字と小文字は区別せず、<code>01</code>・<code>+1</code>・全角の <code>１</code> は <code>1</code> と同じパターン。</li>
           <li><code>//</code> で始まる行はコメント。</li>
         </ul>
         <ul>
@@ -303,7 +303,6 @@ const FixtureCore = (() => {
   // DbJigu.Operator と同じく、2文字の記号を先に判定する
   const MARKS = ['<=', '>=', '!=', '<', '>', '%', '@'];
   const MARK_CHARS = '@<>=!%';
-  const INT_MAX = 2147483647;
 
   // Java の String.trim() と同じく、U+0020 以下の文字だけを取り除く（全角空白は残る）
   function jtrim(s) {
@@ -505,23 +504,52 @@ const FixtureCore = (() => {
     return out.length ? out.join(doc.eol) + doc.eol : '';
   }
 
-  // 行のパターン番号（数値でないものは除く）
+  // パターン番号を比べるための形（DbJigu.patternKey と同じ）。数値として読めるものは数値として（01 と 1 を同じに）、
+  // それ以外は大文字と小文字を区別せずに比べる
+  function patternKey(pattern) {
+    return /^[+-]?\p{Nd}+$/u.test(pattern) ? BigInt(asciiDigits(pattern)).toString() : pattern.toLowerCase();
+  }
+
+  // Unicode の数字（全角の １ など）を ASCII の数字にする（Java の Character.digit と同じ値）。
+  // Unicode の 10 進数字は 0〜9 が連続して並ぶので、数字の並びの先頭からの位置で値が決まる
+  function asciiDigits(s) {
+    return s.replace(/\p{Nd}/gu, ch => {
+      const cp = ch.codePointAt(0);
+      let start = cp;
+      while (/\p{Nd}/u.test(String.fromCodePoint(start - 1))) start--;
+      return String((cp - start) % 10);
+    });
+  }
+
+  // 行のパターン番号を、比べるための形で返す（空のものは除く）
   function patternsOf(row) {
     if (!row.pattern) return [];
-    return row.pattern.split(',').map(jtrim).filter(p => /^[+-]?\d+$/.test(p)).map(Number);
+    return row.pattern.split(',').map(jtrim).filter(p => p !== '').map(patternKey);
   }
 
+  // ファイルにあるパターン番号の一覧。label は最初に書かれていた表記。数値を先に、名前を後に並べる
   function allPatterns(doc) {
-    const set = new Set();
+    const labels = new Map();
     for (const s of doc.sections) {
       if (!s.hasPattern) continue;
-      for (const r of s.rows) if (r.kind === 'data') patternsOf(r).forEach(p => set.add(p));
+      for (const r of s.rows) {
+        if (r.kind !== 'data' || !r.pattern) continue;
+        for (const p of r.pattern.split(',').map(jtrim).filter(p => p !== '')) {
+          if (!labels.has(patternKey(p))) labels.set(patternKey(p), p);
+        }
+      }
     }
-    return [...set].sort((a, b) => a - b);
+    const isNumber = key => /^-?[0-9]+$/.test(key);
+    return [...labels].map(([key, label]) => ({ key, label })).sort((a, b) => {
+      if (isNumber(a.key) && isNumber(b.key)) return BigInt(a.key) < BigInt(b.key) ? -1 : BigInt(a.key) > BigInt(b.key) ? 1 : 0;
+      if (isNumber(a.key) !== isNumber(b.key)) return isNumber(a.key) ? -1 : 1;
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+    });
   }
 
-  function inPattern(section, row, pattern) {
-    return pattern == null || !section.hasPattern || row.pattern === '' || patternsOf(row).includes(pattern);
+  // key は patternKey の形。null なら全行
+  function inPattern(section, row, key) {
+    return key == null || !section.hasPattern || row.pattern === '' || patternsOf(row).includes(key);
   }
 
   // DbJigu が実行時に例外にするもの（error）と、意図と違う結果になりやすいもの（warn / info）を挙げる。
@@ -566,9 +594,13 @@ const FixtureCore = (() => {
               r.cells.length < s.columns.length || r.cells.slice(s.columns.length).every(v => v === '') ? 'fit' : null);
         }
         if (s.hasPattern && r.pattern !== '') {
-          const bad = r.pattern.split(',').map(jtrim)
-              .some(p => !/^[+-]?\d+$/.test(p) || Math.abs(Number(p)) > INT_MAX);
-          if (bad) add('error', si, ri, 0, 'パターン番号が数値ではありません: ' + r.pattern);
+          const items = r.pattern.split(',').map(jtrim);
+          if (items.some(p => p === '')) {
+            add('error', si, ri, 0, '空のパターン番号があります: ' + r.pattern);
+          } else if (items.some(p => !/^[+-]?\p{Nd}+$/u.test(p) && /\p{Nd}/u.test(p) && /[\s、。．.，・]/u.test(p))) {
+            // 1、2 や 1.2 は名前として読まれ、パターン 1 や 2 には含まれない（以前はエラーだった書き間違い）
+            add('warn', si, ri, 0, 'パターン番号に数字と記号が混じっています（複数のパターンは , で区切ります）: ' + r.pattern);
+          }
         }
         const fields = fieldsOf(s, r);
         fields.forEach((v, f) => {
@@ -628,7 +660,7 @@ const FixtureCore = (() => {
 
   return {
     NULL_VALUE, MARKS, jtrim, splitFields, splitMark, parse, serialize, lint, fieldsOf, headerFields,
-    setField, displayWidth, patternsOf, allPatterns, inPattern, parseTsv, toTsv,
+    setField, displayWidth, patternKey, patternsOf, allPatterns, inPattern, parseTsv, toTsv,
   };
 })();
 if (typeof module !== 'undefined') module.exports = FixtureCore;
@@ -989,12 +1021,19 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     }
   }
 
+  // 絞り込み中のパターン番号の、ファイルでの表記（行を追加するときに使う）
+  function filterLabel() {
+    if (state.filter == null) return '';
+    const p = C.allPatterns(state.doc).find(x => x.key === state.filter);
+    return p ? p.label : '';
+  }
+
   function renderPatterns(doc) {
     const sel = $('selFilter');
     const patterns = doc ? C.allPatterns(doc) : [];
-    if (state.filter != null && !patterns.includes(state.filter)) state.filter = null;
+    if (state.filter != null && !patterns.some(p => p.key === state.filter)) state.filter = null;
     sel.innerHTML = '<option value="">すべて</option>'
-      + patterns.map(p => `<option value="${p}"${p === state.filter ? ' selected' : ''}>${p}</option>`).join('');
+      + patterns.map(p => `<option value="${esc(p.key)}"${p.key === state.filter ? ' selected' : ''}>${esc(p.label)}</option>`).join('');
     sel.disabled = state.mode !== 'grid' || !patterns.length;
 
     const box = $('patterns');
@@ -1004,14 +1043,14 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       return;
     }
     let h = '<table class="matrix"><thead><tr><th>テーブル</th><th title="パターン番号が空の行">共通</th>'
-      + patterns.map(p => `<th class="${p === state.filter ? 'on' : ''}">${p}</th>`).join('') + '</tr></thead><tbody>';
+      + patterns.map(p => `<th class="${p.key === state.filter ? 'on' : ''}">${esc(p.label)}</th>`).join('') + '</tr></thead><tbody>';
     for (const { s } of secs) {
       const rows = s.rows.filter(r => r.kind === 'data');
       const common = rows.filter(r => r.pattern === '').length;
       h += `<tr><td>${esc(s.name || '（無名）')}</td><td>${common}</td>`;
       for (const p of patterns) {
-        const n = rows.filter(r => C.patternsOf(r).includes(p)).length;
-        h += `<td class="${p === state.filter ? 'on' : ''}${n + common === 0 ? ' zero' : ''}">${n}</td>`;
+        const n = rows.filter(r => C.patternsOf(r).includes(p.key)).length;
+        h += `<td class="${p.key === state.filter ? 'on' : ''}${n + common === 0 ? ' zero' : ''}">${n}</td>`;
       }
       h += '</tr>';
     }
@@ -1240,7 +1279,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
         }, { s: si, r: 'h', f: sec.columns.length + off });
         break;
       case 'sec-addrow':
-        mutate(() => { sec.rows.push(newRow(sec, state.filter != null ? String(state.filter) : '')); },
+        mutate(() => { sec.rows.push(newRow(sec, filterLabel())); },
           { s: si, r: sec.rows.length, f: off });
         break;
       case 'sec-comment':
@@ -1421,7 +1460,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   });
 
   $('selFilter').addEventListener('change', e => {
-    state.filter = e.target.value === '' ? null : Number(e.target.value);
+    state.filter = e.target.value === '' ? null : e.target.value;
     render();
   });
 
