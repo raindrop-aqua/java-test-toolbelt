@@ -129,7 +129,7 @@ Tests connect to PostgreSQL 17. Tables are created inside the test transaction a
 
    You can also change the user and password with `-Pdbjigu.user=...` and `-Pdbjigu.password=...`. To run only some tests, use `--tests` (for example `./gradlew test --tests '*OrderServiceTest*'`).
 
-The fixture editor's tests need only Node.js (and Chrome for the UI tests, which are skipped without it):
+The fixture editor's tests need only Node.js 22 or later (and Chrome for the UI tests, which are skipped without it):
 
 ```bash
 node --test tools/test/*.test.js

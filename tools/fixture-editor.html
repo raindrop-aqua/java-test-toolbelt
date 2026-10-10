@@ -1092,7 +1092,15 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     }
   });
 
+  // IME で変換中のキー（確定の Enter、候補を選ぶ ↑ ↓ など）は変換に任せる。
+  // 変換中に行を移動すると、確定した文字が移動先のセルにも入る（#27）。
+  // Safari では確定の Enter の keydown が compositionend の後に来て isComposing が false になるが、keyCode は 229 になる
+  let composing = false;
+  grid.addEventListener('compositionstart', () => { composing = true; });
+  grid.addEventListener('compositionend', () => { composing = false; });
+
   grid.addEventListener('keydown', e => {
+    if (composing || e.isComposing || e.keyCode === 229) return;
     const el = e.target;
     if (el.matches('input.cell')) {
       const { s, r, f } = locate(el);

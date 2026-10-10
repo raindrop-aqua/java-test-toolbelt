@@ -129,7 +129,7 @@ DB には接続しないので、テーブル名や列名が正しいか、値�
 
    ユーザーとパスワードも `-Pdbjigu.user=...` と `-Pdbjigu.password=...` で変えられます。特定のテストだけ実行するには `--tests` を使います（例：`./gradlew test --tests '*OrderServiceTest*'`）。
 
-フィクスチャエディタのテストに必要なのは Node.js だけです（画面のテストには Chrome を使い、無ければスキップします）。
+フィクスチャエディタのテストに必要なのは Node.js 22 以降だけです（画面のテストには Chrome を使い、無ければスキップします）。
 
 ```bash
 node --test tools/test/*.test.js

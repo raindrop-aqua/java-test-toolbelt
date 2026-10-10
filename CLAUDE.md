@@ -99,6 +99,8 @@ node --test tools/test/*.test.js     # FixtureCore and the UI (no npm packages n
 
 - `core.test.js` round-trips every fixture under `src/test/resources/data` (with and without alignment) and tests parsing, writing, checks, and TSV. Fixtures added to the repo are picked up automatically.
 - `ui.test.js` opens the page in headless Chrome with `ui-harness.js` injected and checks the result of real UI operations. It is skipped when Chrome isn't found (`CHROME_PATH` overrides the location), except in CI, where a missing Chrome is a failure.
+- `ime.test.js` drives the page through the Chrome DevTools Protocol (`chrome.js`) to send IME input (`Input.imeSetComposition`), which `--dump-dom` can't do. It needs Node 22 or later for the built-in `WebSocket`, and is skipped without it or without Chrome, except in CI.
+- Keyboard handlers must ignore keys while an IME is composing (`isComposing`, `keyCode` 229, or between `compositionstart` and `compositionend`). Otherwise the Enter that confirms a conversion also moves to the next row, and the confirmed text is typed again there (#27).
 - GitHub Actions runs these in the `fixture-editor` job.
 - When a change could affect what DbJigu reads (parsing or alignment), also run `./gradlew test` against a copy of the repo whose fixtures were rewritten with aligned output. The only expected failure is the test in `DbJiguTest` that checks the raw row text in the error message.
 
