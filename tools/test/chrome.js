@@ -28,8 +28,13 @@ function chromeArgs(profileDir, ...rest) {
 async function openPage(chrome, url) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fixture-editor-cdp-'));
   const proc = spawn(chrome, chromeArgs(dir, '--remote-debugging-port=0', 'about:blank'), { stdio: ['ignore', 'ignore', 'pipe'] });
-  const cleanup = () => {
-    proc.kill();
+  const exited = new Promise(resolve => proc.once('exit', resolve));
+  // Chrome が終了してから消す。終了する前に消すと、Chrome がまだ書き込んでいて ENOTEMPTY になる
+  const cleanup = async () => {
+    if (proc.exitCode === null && proc.signalCode === null) {
+      proc.kill();
+      await exited;
+    }
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
   try {
@@ -94,13 +99,13 @@ async function openPage(chrome, url) {
     return {
       send,
       evaluate,
-      close() {
+      async close() {
         ws.close();
-        cleanup();
+        await cleanup();
       },
     };
   } catch (e) {
-    cleanup();
+    await cleanup();
     throw e;
   }
 }

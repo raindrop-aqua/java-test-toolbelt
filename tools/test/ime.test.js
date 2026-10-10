@@ -20,7 +20,9 @@ test.describe('IME での入力', { skip }, () => {
   test.beforeEach(async () => {
     page = await openPage(chrome, pathToFileURL(EDITOR).href);
   });
-  test.afterEach(() => page.close());
+  test.afterEach(async () => {
+    await page.close();
+  });
 
   const cell = (r, f) => `document.querySelector('input.cell[data-s="0"][data-r="${r}"][data-f="${f}"]')`;
   const focus = (r, f) => page.evaluate(`${cell(r, f)}.focus()`);
