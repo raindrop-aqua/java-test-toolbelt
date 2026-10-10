@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.3.1
+ * DB治具（DbJigu） v2.4.0
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -100,6 +100,14 @@ import java.util.stream.Collectors;
  *   <li>名前には {@code |} と {@code ,} を使えない。前後の空白は取り除く。</li>
  * </ul>
  *
+ * <h2>検証が失敗したとき</h2>
+ * 期待と違った行の下に、原因の手がかりを表示する（コンソールと AssertionError のメッセージ）。
+ * <ul>
+ *   <li>DBに無かった行：条件を1つずつ外して検索し直し、外すと一致する列と、その列のDBの値を表示する。</li>
+ *   <li>DBにあってはいけない行：見つかった行の、記号付きの列の値を表示する。</li>
+ *   <li>調べるのは1回の検証で先頭10行まで。調べるための SQL は、失敗した行についてだけ実行する。</li>
+ * </ul>
+ *
  * <h2>利用例（Spring の {@code @Transactional} テスト）</h2>
  * <pre>
  * // テストのトランザクションに参加している Connection を渡すこと（終了後にロールバックされる）
@@ -122,6 +130,11 @@ public class DbJigu {
     private static final Pattern INTEGER = Pattern.compile("[+-]?\\p{Nd}+");
     private static final String MARK_CHARACTERS = "@<>=!%";
     private static final char LIKE_ESCAPE = '!';
+    // 違った列を調べる行数（1回の検証あたり）と、表示する DB の値の数
+    private static final int MAX_EXPLAINED_ROWS = 10;
+    private static final int MAX_SHOWN_VALUES = 3;
+    // 違った列を調べるときに読む DB の行数の上限（同じ値の行が多くても読みすぎないように）
+    private static final int MAX_SCANNED_ROWS = 100;
 
     private static final DateTimeFormatter DATE_TIME_FORMAT = new DateTimeFormatterBuilder()
             .appendPattern("uuuu-MM-dd HH:mm")
@@ -183,7 +196,7 @@ public class DbJigu {
      * @return 存在しなかった行の件数（0なら成功）
      */
     public int verifyExists(String filePath) {
-        return verify(filePath, true).size();
+        return verify(filePath, true).failures().size();
     }
 
     /**
@@ -194,7 +207,7 @@ public class DbJigu {
      * @return 存在しなかった行の件数（0なら成功）
      */
     public int verifyExists(String filePath, int... patterns) {
-        return verify(filePath, true, toNames(patterns)).size();
+        return verify(filePath, true, toNames(patterns)).failures().size();
     }
 
     /**
@@ -205,7 +218,7 @@ public class DbJigu {
      * @return 存在しなかった行の件数（0なら成功）
      */
     public int verifyExists(String filePath, String... patterns) {
-        return verify(filePath, true, patterns).size();
+        return verify(filePath, true, patterns).failures().size();
     }
 
     /**
@@ -215,7 +228,7 @@ public class DbJigu {
      * @return 存在した行の件数（0なら成功）
      */
     public int verifyNotExists(String filePath) {
-        return verify(filePath, false).size();
+        return verify(filePath, false).failures().size();
     }
 
     /**
@@ -226,7 +239,7 @@ public class DbJigu {
      * @return 存在した行の件数（0なら成功）
      */
     public int verifyNotExists(String filePath, int... patterns) {
-        return verify(filePath, false, toNames(patterns)).size();
+        return verify(filePath, false, toNames(patterns)).failures().size();
     }
 
     /**
@@ -237,7 +250,7 @@ public class DbJigu {
      * @return 存在した行の件数（0なら成功）
      */
     public int verifyNotExists(String filePath, String... patterns) {
-        return verify(filePath, false, patterns).size();
+        return verify(filePath, false, patterns).failures().size();
     }
 
     /**
@@ -342,20 +355,25 @@ public class DbJigu {
 
     // 検証を行い、期待と異なった行があれば AssertionError を投げる
     private void assertVerified(String filePath, boolean expectExists, String message, String... patterns) {
-        List<String> failures = verify(filePath, expectExists, patterns);
-        if (!failures.isEmpty()) {
+        Verification result = verify(filePath, expectExists, patterns);
+        if (!result.failures.isEmpty()) {
+            List<String> lines = new ArrayList<>(result.failures);
+            if (result.unexplained > 0) {
+                lines.add(unexplainedNote(result.unexplained));
+            }
             throw new AssertionError(message + filePath + System.lineSeparator()
-                    + String.join(System.lineSeparator(), failures));
+                    + String.join(System.lineSeparator(), lines));
         }
     }
 
-    // 検証を行い、期待と異なった行の一覧を返す
-    private List<String> verify(String filePath, boolean expectExists, String... patterns) {
+    // 検証を行い、期待と異なった行の一覧を返す。先頭の行から MAX_EXPLAINED_ROWS 行までは、違った列も調べて添える
+    private Verification verify(String filePath, boolean expectExists, String... patterns) {
         List<Section> sections = readFile(filePath, patterns);
         if (sections.stream().allMatch(s -> s.rows.isEmpty())) {
             throw new IllegalArgumentException("検証対象の行がありません: " + filePath);
         }
         List<String> failures = new ArrayList<>();
+        int unexplained = 0;
         for (Section section : sections) {
             if (section.rows.isEmpty()) {
                 continue;
@@ -366,23 +384,115 @@ public class DbJigu {
                 String description = String.format("%s:%d [%s] %s", filePath, row.lineNumber, section.tableName, row.text);
                 if (exists(filePath, section, types, row) == expectExists) {
                     System.out.println("○: " + description);
-                } else {
-                    System.out.println("×: " + description);
-                    failures.add(description);
+                    continue;
                 }
+                StringBuilder failure = new StringBuilder(description);
+                if (failures.size() < MAX_EXPLAINED_ROWS) {
+                    for (String detail : explain(filePath, section, types, row, expectExists)) {
+                        failure.append(System.lineSeparator()).append("    ").append(detail);
+                    }
+                } else {
+                    unexplained++;
+                }
+                System.out.println("×: " + failure);
+                failures.add(failure.toString());
             }
         }
-        return failures;
+        if (unexplained > 0) {
+            System.out.println(unexplainedNote(unexplained));
+        }
+        return new Verification(failures, unexplained);
+    }
+
+    private static String unexplainedNote(int count) {
+        return "（ほか " + count + " 行は、違った列を調べていません）";
     }
 
     // 行がDBに存在するか判定する
     private boolean exists(String filePath, Section section, int[] types, Row row) {
+        return !findRows(filePath, section, types, row, Set.of(), List.of(), 1).isEmpty();
+    }
+
+    // 期待と異なった行について、原因の手がかりを返す。
+    // 調べるための SQL が失敗しても、検証の結果（失敗）は変えずに、調べられなかったことを表示する
+    private List<String> explain(String filePath, Section section, int[] types, Row row, boolean expectExists) {
+        try {
+            return expectExists ? explainMissing(filePath, section, types, row) : explainFound(filePath, section, types, row);
+        } catch (IllegalStateException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            return List.of("違った列を調べられませんでした: " + cause.getMessage());
+        }
+    }
+
+    // DBに無かった行について、条件を1つずつ外して検索し直し、外すと一致する列とその列の DB の値を返す
+    private List<String> explainMissing(String filePath, Section section, int[] types, Row row) {
+        List<Integer> compared = comparedColumns(section, false);
+        List<String> details = new ArrayList<>();
+        for (int i : compared) {
+            List<List<String>> found = findRows(filePath, section, types, row, Set.of(i), List.of(i), MAX_SCANNED_ROWS + 1);
+            if (!found.isEmpty()) {
+                Column column = section.columns.get(i);
+                details.add(column.name + column.operator.mark + " を除くと一致する行があります。DB の値: "
+                        + summarize(found.stream().map(values -> values.get(0)).toList(), ", "));
+            }
+        }
+        if (details.isEmpty()) {
+            boolean empty = findRows(filePath, section, types, row, Set.copyOf(compared), List.of(), 1).isEmpty();
+            details.add(empty ? "テーブルに行がありません"
+                    : "1つの列を除いても一致する行はありません（2つ以上の列が違うか、該当する行がありません）");
+        }
+        return details;
+    }
+
+    // DBにあってはいけない行が見つかったときに、見つかった行の、記号付きの列の値を返す。
+    // 記号の無い列はファイルと同じ値なので表示しない
+    private List<String> explainFound(String filePath, Section section, int[] types, Row row) {
+        List<Integer> marked = comparedColumns(section, true);
+        if (marked.isEmpty()) {
+            return List.of();
+        }
+        List<String> rows = findRows(filePath, section, types, row, Set.of(), marked, MAX_SCANNED_ROWS + 1).stream()
+                .map(values -> {
+                    List<String> pairs = new ArrayList<>();
+                    for (int p = 0; p < marked.size(); p++) {
+                        pairs.add(section.columns.get(marked.get(p)).name + "=" + values.get(p));
+                    }
+                    return String.join(", ", pairs);
+                }).toList();
+        return List.of("一致した DB の行: " + summarize(rows, " / "));
+    }
+
+    // 比較する列（@ 以外）。markedOnly なら、記号の無い列も除く
+    private static List<Integer> comparedColumns(Section section, boolean markedOnly) {
+        List<Integer> indexes = new ArrayList<>();
+        for (int i = 0; i < section.columns.size(); i++) {
+            Operator operator = section.columns.get(i).operator;
+            if (operator != Operator.IGNORE && !(markedOnly && operator == Operator.EQUAL)) {
+                indexes.add(i);
+            }
+        }
+        return indexes;
+    }
+
+    // 値を重複なく、最大 MAX_SHOWN_VALUES 件まで並べる。values は findRows で MAX_SCANNED_ROWS + 1 行まで読んだもの。
+    // 上限を超えて読めたときは、読まなかった行に別の値があり得るので「ほか」を付ける
+    private static String summarize(List<String> values, String separator) {
+        boolean truncated = values.size() > MAX_SCANNED_ROWS;
+        List<String> distinct = values.subList(0, Math.min(MAX_SCANNED_ROWS, values.size())).stream().distinct().toList();
+        String shown = String.join(separator, distinct.subList(0, Math.min(MAX_SHOWN_VALUES, distinct.size())));
+        return distinct.size() > MAX_SHOWN_VALUES || truncated ? shown + " ほか" : shown;
+    }
+
+    // 行の条件でDBを検索し、一致した行の show の列の値（表示用の文字列）を、最大 limit 行まで返す。
+    // excluded の列は条件から外す（違った列を調べるときに使う）
+    private List<List<String>> findRows(String filePath, Section section, int[] types, Row row,
+                                        Set<Integer> excluded, List<Integer> show, int limit) {
         List<Integer> whereIndexes = new ArrayList<>();
         List<Integer> lobIndexes = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         for (int i = 0; i < section.columns.size(); i++) {
             Column column = section.columns.get(i);
-            if (column.operator == Operator.IGNORE) {
+            if (column.operator == Operator.IGNORE || excluded.contains(i)) {
                 continue;
             }
             if (isLob(types[i])) {
@@ -404,8 +514,11 @@ public class DbJigu {
             }
             whereIndexes.add(i);
         }
-        String selectList = lobIndexes.isEmpty() ? "1"
-                : lobIndexes.stream().map(i -> section.columns.get(i).name).collect(Collectors.joining(", "));
+        // 表示する列の後に LOB 列を並べる
+        List<Integer> selected = new ArrayList<>(show);
+        selected.addAll(lobIndexes);
+        String selectList = selected.isEmpty() ? "1"
+                : selected.stream().map(i -> section.columns.get(i).name).collect(Collectors.joining(", "));
         String sql = "SELECT " + selectList + " FROM " + section.tableName
                 + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions));
 
@@ -418,24 +531,38 @@ public class DbJigu {
                     bind(ps, p + 1, types[i], row.values.get(i), filePath, row);
                 }
             }
+            List<List<String>> found = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    if (lobsMatch(rs, section, lobIndexes, row)) {
-                        return true;
+                while (found.size() < limit && rs.next()) {
+                    if (lobsMatch(rs, show.size(), section, lobIndexes, row)) {
+                        List<String> values = new ArrayList<>();
+                        for (int p = 0; p < show.size(); p++) {
+                            values.add(display(rs.getString(p + 1), types[show.get(p)]));
+                        }
+                        found.add(values);
                     }
                 }
-                return false;
             }
+            return found;
         } catch (SQLException e) {
             throw new IllegalStateException(location(filePath, row.lineNumber) + " 検証に失敗しました: " + sql, e);
         }
     }
 
-    // LOB列の値を Java 側で比較する
-    private boolean lobsMatch(ResultSet rs, Section section, List<Integer> lobIndexes, Row row) throws SQLException {
+    // DBの値を表示用の文字列にする。CHAR 型は比較と同じく末尾の空白を除く
+    private static String display(String value, int type) {
+        if (value == null) {
+            return NULL_VALUE;
+        }
+        return type == Types.CHAR || type == Types.NCHAR ? value.stripTrailing() : value;
+    }
+
+    // LOB列の値を Java 側で比較する。LOB 列は、結果の offset 列目の後に並んでいる
+    private boolean lobsMatch(ResultSet rs, int offset, Section section, List<Integer> lobIndexes, Row row)
+            throws SQLException {
         for (int p = 0; p < lobIndexes.size(); p++) {
             int i = lobIndexes.get(p);
-            if (!matchesInJava(section.columns.get(i).operator, row.values.get(i), rs.getString(p + 1))) {
+            if (!matchesInJava(section.columns.get(i).operator, row.values.get(i), rs.getString(offset + p + 1))) {
                 return false;
             }
         }
@@ -734,6 +861,10 @@ public class DbJigu {
 
     private static String location(String filePath, int lineNumber) {
         return filePath + ":" + lineNumber;
+    }
+
+    // 検証の結果。unexplained は、違った列を調べなかった行の数
+    private record Verification(List<String> failures, int unexplained) {
     }
 
     private record Section(String tableName, List<Column> columns, boolean hasPattern, int headerLineNumber,

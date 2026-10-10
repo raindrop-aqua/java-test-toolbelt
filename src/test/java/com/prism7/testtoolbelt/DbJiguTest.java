@@ -465,6 +465,124 @@ class DbJiguTest {
     }
 
     @Nested
+    class 違った列の表示 {
+
+        private String failureMessage(Runnable assertion) {
+            return assertThrows(AssertionError.class, assertion::run).getMessage();
+        }
+
+        @Test
+        void 一つの列だけ違えば_その列とDBの値を表示する(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john'), (2, 'sam')");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "1|jon");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("fixture.txt:3 [Member] 1|jon" + System.lineSeparator()
+                    + "    MemberName を除くと一致する行があります。DB の値: john"), message);
+            assertFalse(message.contains("MemberId を除くと"), message);
+        }
+
+        @Test
+        void 記号付きの列も1つずつ外して調べる(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john')");
+            String file = write(dir, "[Member]", "{MemberId>=|MemberId<|MemberName}", "3|5|john");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("MemberId>= を除くと一致する行があります。DB の値: 1"), message);
+        }
+
+        @Test
+        void DBの値がNULLなら_nullと表示する(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (3, NULL)");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "3|nobody");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("MemberName を除くと一致する行があります。DB の値: <null>"), message);
+        }
+
+        @Test
+        void CHAR型の値は末尾の空白を除いて表示する(@TempDir Path dir) {
+            update("INSERT INTO TestTable (string_column, char_column) VALUES ('x', 'abc')");
+            String file = write(dir, "[TestTable]", "{string_column|char_column}", "x|zzz");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("char_column を除くと一致する行があります。DB の値: abc" + System.lineSeparator())
+                    || message.endsWith("char_column を除くと一致する行があります。DB の値: abc"), message);
+        }
+
+        @Test
+        void DBの値は重複を除いて最大3件表示する(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'x'), (1, 'x'), (2, 'x'), (3, 'x'), (4, 'x')");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "9|x");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.matches("(?s).*MemberId を除くと一致する行があります。DB の値: (\\d), (?!\\1)\\d, \\d ほか.*"), message);
+        }
+
+        @Test
+        void 読む行数の上限を超えたら_値が少なくても_ほか_を付ける(@TempDir Path dir) {
+            // 101 行目の b は読まないので、表示は a だけになる。ほかの値があり得ることを「ほか」で示す
+            update("INSERT INTO Member (MemberId, MemberName) SELECT 1, 'a' FROM generate_series(1, 100)");
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'b')");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "1|zzz");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("MemberName を除くと一致する行があります。DB の値: a ほか"), message);
+        }
+
+        @Test
+        void 二つ以上の列が違えば_その旨を表示する(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john')");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "9|bob");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("    1つの列を除いても一致する行はありません（2つ以上の列が違うか、該当する行がありません）"), message);
+        }
+
+        @Test
+        void テーブルが空なら_その旨を表示する(@TempDir Path dir) {
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "1|john");
+
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertTrue(message.contains("    テーブルに行がありません"), message);
+        }
+
+        @Test
+        void あってはいけない行が見つかれば_記号付きの列の値を表示する(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john'), (2, 'sam'), (3, 'sam')");
+            String file = write(dir, "[Member]", "{MemberId!=|MemberName}", "1|sam");
+
+            String message = failureMessage(() -> jigu.assertNotExists(file));
+            assertTrue(message.contains("fixture.txt:3 [Member] 1|sam" + System.lineSeparator()
+                    + "    一致した DB の行: MemberId=2 / MemberId=3"), message);
+        }
+
+        @Test
+        void 記号の無い列だけなら_見つかった行の値は表示しない(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john')");
+            String file = write(dir, "[Member]", "{MemberId|MemberName}", "1|john");
+
+            String message = failureMessage(() -> jigu.assertNotExists(file));
+            assertTrue(message.endsWith("fixture.txt:3 [Member] 1|john"), message);
+        }
+
+        @Test
+        void 調べるのは1回の検証で先頭10行まで(@TempDir Path dir) {
+            update("INSERT INTO Member (MemberId, MemberName) VALUES (1, 'john')");
+            List<String> lines = new ArrayList<>(List.of("[Member]", "{MemberId|MemberName}"));
+            for (int i = 1; i <= 12; i++) {
+                lines.add(i + "|nobody");
+            }
+            String file = write(dir, lines.toArray(String[]::new));
+
+            assertEquals(12, jigu.verifyExists(file), "件数には調べなかった行も含める");
+            String message = failureMessage(() -> jigu.assertExists(file));
+            assertEquals(10, message.split("を除くと一致する行があります|1つの列を除いても", -1).length - 1, message);
+            assertTrue(message.endsWith("（ほか 2 行は、違った列を調べていません）"), message);
+        }
+    }
+
+    @Nested
     class コメント {
 
         @Test

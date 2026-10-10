@@ -674,16 +674,31 @@ Verification prints a result for each row of the file to the console (`○` mean
 ○: src/test/resources/data/order/cancel/expected.txt:3 [orders] A001|CANCELED|キャンセル: お客様都合|2024-04-01 10:00
 ○: src/test/resources/data/order/cancel/expected.txt:7 [order_item] A002|1
 ×: src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
+    stock を除くと一致する行があります。DB の値: 99
 ○: src/test/resources/data/order/cancel/expected.txt:12 [product] P002|50
 ```
 
 When `assertExists` fails, the `×` rows go into the `AssertionError` message. The `file:line` tells you which row did not match. (The message text is Japanese; it means "rows not found in the DB".)
+
+Under each `×` row, DbJigu shows a hint about which column differed. It searches the DB again with the row's conditions, leaving out one condition at a time, and shows each column whose removal makes the row match, together with that column's value in the DB. In the example above, the row matches without `stock` (`stock を除くと一致する行があります`), and the stock in the DB is 99.
+
+| Message | Meaning |
+|---|---|
+| `列 を除くと一致する行があります。DB の値: 値` | Only that column differs. Up to three distinct DB values are shown (more is shown as `ほか`, "and others"). Values are taken from the first 100 matching rows, and `ほか` is also added when there are more rows than that |
+| `1つの列を除いても一致する行はありません（…）` | Two or more columns differ, or there is no such row at all |
+| `テーブルに行がありません` | The table is empty |
+| `一致した DB の行: 列=値 / …` | With `assertNotExists`, a row that must not exist was found. Shows the values of the marked columns (`!=`, `>`, `%`, and so on) for up to three rows. Unmarked columns have the same value as the file, so they are not shown |
+
+- Marked columns are left out one at a time too (for example, the row matches without `ordered_at>=`).
+- The extra SQL runs only for rows that failed, so passing tests are not slower.
+- One verification looks into at most the first 10 failed rows. For the rest, it shows `ほか n 行は、違った列を調べていません` ("n more rows were not looked into").
 
 Each row is shown with the spaces around its values removed and the values joined again with `|`. Even in a file whose `|` characters are lined up with spaces, a row is shown as `A001|C001|RECEIVED`.
 
 ```
 java.lang.AssertionError: DBに存在しない行があります: src/test/resources/data/order/cancel/expected.txt
 src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
+    stock を除くと一致する行があります。DB の値: 99
 ```
 
 ---
@@ -800,6 +815,7 @@ Error messages are in Japanese and start with `file:line`.
 
 | Check | Fix |
 |---|---|
+| Does the output under the `×` row name a column? | Check the column and the DB value in `列 を除くと一致する行があります。DB の値: …` ([5.3](#53-output-on-failure)) |
 | Did you flush JPA changes? | Call `entityManager.flush()` before verifying |
 | Are you using the same Connection? | In Spring, use `DataSourceUtils.getConnection(dataSource)` |
 | Do the seconds and milliseconds of timestamps match? | Write the needed precision, or compare with a `>=` and `<` range |
