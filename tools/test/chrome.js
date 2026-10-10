@@ -29,13 +29,18 @@ async function openPage(chrome, url) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fixture-editor-cdp-'));
   const proc = spawn(chrome, chromeArgs(dir, '--remote-debugging-port=0', 'about:blank'), { stdio: ['ignore', 'ignore', 'pipe'] });
   const exited = new Promise(resolve => proc.once('exit', resolve));
-  // Chrome が終了してから消す。終了する前に消すと、Chrome がまだ書き込んでいて ENOTEMPTY になる
+  // Chrome を終了させてから、一時的なプロファイルを消す。Linux では Chrome の終了後も子プロセスが
+  // 書き込んでいることがあり（ENOTEMPTY）、消せなくてもテストの結果には関係しないので、失敗は無視する
   const cleanup = async () => {
     if (proc.exitCode === null && proc.signalCode === null) {
       proc.kill();
-      await exited;
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
     }
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    } catch (e) {
+      // 一時フォルダなので、残っても OS が片付ける
+    }
   };
   try {
     // 起動時に標準エラーへ出力される、接続先のポートを読む
@@ -100,6 +105,9 @@ async function openPage(chrome, url) {
       send,
       evaluate,
       async close() {
+        // まず Chrome に自分で終了してもらう（プロファイルへの書き込みを終えてから終了する）
+        await Promise.race([send('Browser.close').catch(() => {}), new Promise(resolve => setTimeout(resolve, 3000))]);
+        await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 5000))]);
         ws.close();
         await cleanup();
       },
