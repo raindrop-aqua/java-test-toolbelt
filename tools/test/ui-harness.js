@@ -46,6 +46,19 @@
     $('btnGrid').click();
     result.steps.loaded = { sections: document.querySelectorAll('section.sec').length, status: status() };
 
+    // 行・列の操作ボタンの表示の切り替え（行番号は常に表示する）
+    const shown = () => ({
+      checked: $('chkTools').checked,
+      rowTools: getComputedStyle(q('.rtools')).display,
+      colTools: getComputedStyle(q('.coltools')).display,
+      lineNumber: getComputedStyle(q('tbody .rh .ln')).display,
+    });
+    const toggleTools = () => {
+      $('chkTools').click();
+      return shown();
+    };
+    result.steps.tools = { initial: shown(), off: toggleTools(), on: toggleTools() };
+
     // セルの編集と行の追加
     type(cell(1, 0, 1), '99');
     q('section[data-s="1"] [data-act="sec-addrow"]').click();

@@ -129,24 +129,24 @@ textarea.comments {
 }
 
 .grid-wrap { overflow-x: auto; }
-table.grid { border-collapse: collapse; margin-top: 26px; font-family: var(--mono); font-size: 13px; }
+/* 表は内容の幅にする（横幅いっぱいに広げると、余った幅が各列に配られて列が広がる） */
+table.grid { border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
 table.grid th, table.grid td { border: 1px solid var(--border); padding: 0; vertical-align: middle; }
 table.grid th { background: var(--bg); font-weight: normal; text-align: left; }
 .colhead { display: flex; align-items: center; }
 .colhead input { flex: 1; min-width: 0; font-weight: 600; }
+table.grid .colhead input { min-width: 0; }
 .colhead select { border: 0; border-left: 1px solid var(--border); border-radius: 0; font-family: var(--mono); font-size: 12px; background: transparent; padding: 3px 2px; }
 .colhead select.marked { color: var(--accent); font-weight: 700; }
-.grid th.col { position: relative; }
-.coltools {
-  position: absolute; left: 50%; bottom: calc(100% - 2px); transform: translateX(-50%); z-index: 2;
-  display: none; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-}
-th.col:hover .coltools, th.col:focus-within .coltools { display: flex; }
+/* 行・列の操作ボタンは、ツールバーの「行・列の操作」で表示を切り替える（マウスの位置では出し入れしない） */
+.coltools { display: none; justify-content: center; gap: 2px; padding: 2px; border-top: 1px solid var(--border); }
+body.show-tools .coltools { display: flex; }
 .coltools button { padding: 0 5px; font-size: 11px; line-height: 16px; border-radius: 4px; }
 th.pat { text-align: center; color: var(--accent); font-weight: 700; padding: 0 8px; }
 th.extra { color: var(--error); font-size: 11px; padding: 0 6px; }
+/* 列の幅は列名のセルの min-width で決める。width: 100% だと、入力欄の既定の幅（約20文字）を列が確保しようとして広がる */
 table.grid input {
-  width: 100%; border: 0; background: var(--input-bg); padding: 4px 6px; outline: none;
+  width: 0; min-width: 100%; border: 0; background: var(--input-bg); padding: 4px 6px; outline: none;
   font-family: var(--mono); font-size: 13px;
 }
 table.grid input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -157,9 +157,8 @@ input.cell.pat { color: var(--accent); text-align: center; }
 input.ctext { color: var(--comment); }
 .rh { white-space: nowrap; padding: 0 4px !important; background: var(--bg); min-width: 44px; }
 .rh .ln { display: inline-block; min-width: 2.5em; text-align: right; }
-.rtools { display: none; gap: 2px; }
-tr.row:hover .rtools, tr.row:focus-within .rtools { display: inline-flex; }
-tr.row:hover .rh .ln, tr.row:focus-within .rh .ln { display: none; }
+.rtools { display: none; gap: 2px; margin-left: 4px; vertical-align: middle; }
+body.show-tools .rtools { display: inline-flex; }
 .rtools button { padding: 0 4px; font-size: 11px; line-height: 16px; border-radius: 4px; }
 tr.row:hover td { background: var(--row-hover); }
 tr.dim { opacity: .3; }
@@ -240,6 +239,9 @@ body.dragging #dropHint { display: flex; }
   <label class="check" title="保存するときに | の位置を縦に揃える（値の前後の空白は DbJigu が取り除くので、意味は変わらない）">
     <input type="checkbox" id="chkAlign"> 桁揃え
   </label>
+  <label class="check" title="行と列の操作ボタン（移動・追加・複製・コメント化・削除）を表示する">
+    <input type="checkbox" id="chkTools"> 行・列の操作
+  </label>
   <label class="check">パターン
     <select id="selFilter"></select>
   </label>
@@ -281,6 +283,7 @@ body.dragging #dropHint { display: flex; }
           <li><kbd>Enter</kbd> / <kbd>↓</kbd> 下の行へ（最後の行では行を追加）、<kbd>Shift+Enter</kbd> / <kbd>↑</kbd> 上の行へ</li>
           <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
           <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
+          <li>行と列の操作ボタン（移動・追加・複製・コメント化・削除）は、ツールバーの「行・列の操作」で表示・非表示を切り替えられる。</li>
           <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
           <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
         </ul>
@@ -637,6 +640,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   const C = FixtureCore;
   const $ = id => document.getElementById(id);
   const ALIGN_KEY = 'dbjigu-fixture-editor.align';
+  const TOOLS_KEY = 'dbjigu-fixture-editor.tools';
 
   const state = {
     doc: null,
@@ -645,6 +649,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     dirty: false,
     mode: 'grid',
     align: true,
+    showTools: true,
     filter: null,
     undo: [],
     redo: [],
@@ -655,6 +660,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   try {
     const saved = localStorage.getItem(ALIGN_KEY);
     if (saved != null) state.align = saved === '1';
+    const tools = localStorage.getItem(TOOLS_KEY);
+    if (tools != null) state.showTools = tools === '1';
   } catch (e) { /* 保存できない環境では既定値を使う */ }
 
   // ---------- モデルの操作 ----------
@@ -734,6 +741,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     $('btnGrid').setAttribute('aria-pressed', state.mode === 'grid');
     $('btnText').setAttribute('aria-pressed', state.mode === 'text');
     $('chkAlign').checked = state.align;
+    $('chkTools').checked = state.showTools;
+    document.body.classList.toggle('show-tools', state.showTools);
     $('btnUndo').disabled = state.mode !== 'grid' || !state.undo.length;
     $('btnRedo').disabled = state.mode !== 'grid' || !state.redo.length;
     renderFileName();
@@ -751,9 +760,24 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     el.classList.toggle('dirty', state.dirty);
   }
 
+  // 列の幅に使う文字数（4〜48）
   function colWidth(texts) {
     const w = Math.max(4, ...texts.map(t => C.displayWidth(t || '')));
     return Math.min(w, 48);
+  }
+
+  // 列名のセルの最小幅。列名は記号のプルダウンの分を、値は入力欄の余白の分を空ける
+  function setColMinWidth(th) {
+    th.style.minWidth = `max(${Number(th.dataset.nw) + 1}ch + 56px, ${Number(th.dataset.vw) + 1}ch + 16px)`;
+  }
+
+  // 入力に合わせて列を広げる（狭めるのは、表を作り直したとき）
+  function growColumn(th, key, text) {
+    const need = C.displayWidth(text);
+    if (need > Number(th.dataset[key]) && need <= 48) {
+      th.dataset[key] = need;
+      setColMinWidth(th);
+    }
   }
 
   function renderGrid() {
@@ -799,10 +823,11 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     if (s.hasPattern) h += '<th class="pat" title="パターン番号">#</th>';
     s.columns.forEach((c, ci) => {
       const f = ci + off;
-      const w = colWidth([c.name + c.mark, ...dataRows.map(r => r.cells[ci])]);
+      const nw = colWidth([c.name]);
+      const vw = colWidth(dataRows.map(r => r.cells[ci]));
       const opts = [['', '='], ...C.MARKS.map(m => [m, m])]
         .map(([v, label]) => `<option value="${esc(v)}"${v === c.mark ? ' selected' : ''}>${esc(label)}</option>`).join('');
-      h += `<th class="col" data-f="${f}" style="min-width:calc(${w + 4}ch + 20px)">
+      h += `<th class="col" data-f="${f}" data-nw="${nw}" data-vw="${vw}" style="min-width:max(${nw + 1}ch + 56px, ${vw + 1}ch + 16px)">
         <div class="colhead">
           <input class="cname" data-s="${si}" data-r="h" data-f="${f}" value="${esc(c.name)}" placeholder="列名" spellcheck="false">
           <select class="mark${c.mark ? ' marked' : ''}" data-s="${si}" data-f="${f}" title="比較の条件（検証のとき）">${opts}</select>
@@ -1030,6 +1055,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       sec.name = el.value;
     } else if (r === 'h') {
       sec.columns[f - (sec.hasPattern ? 1 : 0)].name = el.value;
+      growColumn(el.closest('th'), 'nw', el.value);
     } else if (el.classList.contains('ctext')) {
       sec.rows[r].text = el.value;
     } else if (el.classList.contains('cell')) {
@@ -1037,11 +1063,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       el.classList.toggle('null', el.value === C.NULL_VALUE);
       el.classList.remove('missing');
       const th = el.closest('table').querySelector(`th.col[data-f="${f}"]`);
-      if (th) {
-        const need = C.displayWidth(el.value) + 4;
-        const cur = parseFloat(th.style.minWidth.replace('calc(', '')) || 0;
-        if (need > cur && need <= 52) th.style.minWidth = `calc(${need}ch + 20px)`;
-      }
+      if (th) growColumn(th, 'vw', el.value);
     }
     setDirty();
     scheduleLint();
@@ -1389,6 +1411,13 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       setDirty();
       render();
     }
+  });
+
+  // 表示だけの切り替えなので、表は作り直さない
+  $('chkTools').addEventListener('change', e => {
+    state.showTools = e.target.checked;
+    try { localStorage.setItem(TOOLS_KEY, state.showTools ? '1' : '0'); } catch (err) { /* 無視 */ }
+    document.body.classList.toggle('show-tools', state.showTools);
   });
 
   $('selFilter').addEventListener('change', e => {
