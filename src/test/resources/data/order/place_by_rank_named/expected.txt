@@ -1,0 +1,9 @@
+[orders]
+{#|order_no|customer_id|total_amount}
+gold|A001|C001|2700
+silver|A001|C001|2850
+regular|A001|C001|3000
+
+[product]
+{#|product_code|stock}
+|P002|40

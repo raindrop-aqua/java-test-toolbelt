@@ -26,7 +26,7 @@ DbJigu（DB治具）を使って、DB を扱うテストを書くためのガイ
 2. ファイル先頭の `package` を、コピー先のパッケージに書き換えます。
 3. 使う DB の JDBC ドライバが、テストの依存関係に入っていることを確認します。
 
-必要なのは Java 17 以上と JDBC ドライバだけです。Javadoc の先頭に書かれたバージョン（例：`v2.2.0`）で、どの版をコピーしたか分かります。
+必要なのは Java 17 以上と JDBC ドライバだけです。Javadoc の先頭に書かれたバージョン（例：`v2.3.0`）で、どの版をコピーしたか分かります。
 
 ### 1.2 API 早見表
 
@@ -39,7 +39,7 @@ DbJigu（DB治具）を使って、DB を扱うテストを書くためのガイ
 | `verifyNotExists(file, patterns...)` | `assertNotExists` と同じ判定をする | 一致した行の件数を返す |
 
 - 通常は `importFrom` と `assert*` だけで足ります。`verify*` は「何件違うか」を確かめたいときに使います。
-- `patterns` は省略できます。省略すると全行が対象になります（[3.4](#34-パターン番号)）。
+- `patterns` は省略できます。省略すると全行が対象になります。数値（`1`）でも名前（`"gold"`）でも渡せます（[3.4](#34-パターン番号)）。
 - ファイルの書き間違いや SQL のエラーは、`AssertionError` ではなく例外（`IllegalArgumentException` など）になります。間違いを見過ごして成功することはありません。
 - DbJigu は、渡された `Connection` のコミット、ロールバック、クローズを行いません。
 
@@ -270,6 +270,8 @@ P002|ノート|300|50
 |---|---|
 | `1` | パターン1の行 |
 | `1,3` | パターン1とパターン3の行 |
+| `gold` | パターン gold の行（名前） |
+| `gold,silver` | パターン gold とパターン silver の行 |
 | 空（行の先頭が `\|`） | 全パターン共通の行 |
 | 列名に `#` が無いテーブル | 常に処理する |
 
@@ -278,6 +280,10 @@ P002|ノート|300|50
 - パターン番号を省略すると、全行を処理します。
 - どの行にも無いパターン番号を渡すとエラーになります。番号の書き間違いで、何も検証せずに成功することはありません。
 - `jigu.importFrom(file, 1, 3)` のように、複数のパターンを渡すこともできます。
+- 数値の代わりに名前も書けます。名前は `jigu.importFrom(file, "gold")` のように文字列で渡します（[4.2](#パターン番号に名前を使う)）。
+- 名前の大文字と小文字は区別しません（`Gold` と `gold` は同じパターン）。数値として読めるものは数値として比べます（`01`、`+1`、全角の `１` は `1` と同じパターン）。
+- 名前には `|` と `,` を使えません。前後の空白は取り除きます。
+- `1、2` や `1.2` のような書き間違いは、パターン 1 と 2 ではなく、1つの名前として読まれます。フィクスチャエディタでは警告になります。
 
 ---
 
@@ -459,6 +465,57 @@ void 会員ランクに応じて割り引く(int pattern, String description) th
 - 投入と検証で**同じパターン番号**を渡します。
 - 在庫（`P002` が 40）はどのパターンでも同じなので、パターン番号を空にした共通の行にしています。
 - `description` はテスト名に表示するためだけの引数です。テストの実行結果に「パターン1: GOLD は10%引き」のように表示され、どのケースが失敗したか分かりやすくなります。
+
+#### パターン番号に名前を使う
+
+パターン番号には、数値の代わりに名前を書けます。ファイルを見ただけでどのケースの行か分かり、テスト名のための引数（`description`）も要らなくなります。上と同じテストを、名前で書いた例です。
+
+[place_by_rank_named/given.txt](../src/test/resources/data/order/place_by_rank_named/given.txt)
+
+```
+[customer]
+{#|customer_id|customer_name|customer_rank}
+gold|C001|山田 太郎|GOLD
+silver|C001|山田 太郎|SILVER
+regular|C001|山田 太郎|REGULAR
+
+[product]
+{product_code|product_name|unit_price|stock}
+P002|ノート|300|50
+```
+
+[place_by_rank_named/expected.txt](../src/test/resources/data/order/place_by_rank_named/expected.txt)
+
+```
+[orders]
+{#|order_no|customer_id|total_amount}
+gold|A001|C001|2700
+silver|A001|C001|2850
+regular|A001|C001|3000
+
+[product]
+{#|product_code|stock}
+|P002|40
+```
+
+```java
+@ParameterizedTest(name = "{0}", quoteTextArguments = false)
+@ValueSource(strings = {"gold", "silver", "regular"})
+void 会員ランクに応じて割り引く_名前で指定(String rank) throws SQLException {
+    // Given
+    jigu.importFrom(DATA + "place_by_rank_named/given.txt", rank);
+
+    // When
+    service.placeOrder("A001", "C001", List.of(new OrderLine("P002", 10)));
+
+    // Then
+    jigu.assertExists(DATA + "place_by_rank_named/expected.txt", rank);
+}
+```
+
+- 名前は文字列で渡します。`jigu.importFrom(file, "gold", "silver")` のように、複数も渡せます。
+- テストの実行結果には、渡した名前（`gold` など）がそのまま表示されます。
+- 名前の書き間違い（`"glod"` など）は、どの行にも無いパターンとしてエラーになります。
 
 #### 列名の記号を使う
 
@@ -729,7 +786,8 @@ DbJigu は投入したデータを削除しません。テストのトランザ�
 | `% は文字列の列だけに使えます` | 数値や日付の列に `%` を付けています。 |
 | `列名の末尾の記号は1つだけ付けられます` | `amount@<` のように記号を2つ付けています。 |
 | `LOB 列は大小比較できません` | CLOB などの LOB 列に `<` `<=` `>` `>=` を付けています。 |
-| `パターン番号が数値ではありません` | パターン番号の項目に、数値以外（`a` や `1,,2` など）が書かれています。 |
+| `空のパターン番号があります` | パターン番号の項目に、空の番号（`1,,2` や `gold,` など）があります。 |
+| `パターン番号に使えない値です` | メソッドに渡したパターン番号（名前）が、空や `null` か、`,` や `\|` を含んでいます。 |
 | `テーブル名は [テーブル名] の形式で記述してください` | `[` で始まる行が `]` で終わっていないか、テーブル名が空（`[]` や `[ ]`）です。 |
 | `列名は {列名1\|列名2} の形式で記述してください` | `{` で始まる行が `}` で終わっていません。 |
 | `空の列名があります` / `列名がありません` | 列名の行に、空の項目（`{a\|\|b}` など）があるか、列名が1つもありません。 |

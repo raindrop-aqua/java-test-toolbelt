@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -121,6 +122,20 @@ class OrderServiceTest {
 
             // Then
             jigu.assertExists(DATA + "place_by_rank/expected.txt", pattern);
+        }
+
+        // パターン番号に名前を使うと、ファイルを見ただけでどのケースか分かる
+        @ParameterizedTest(name = "{0}", quoteTextArguments = false)
+        @ValueSource(strings = {"gold", "silver", "regular"})
+        void 会員ランクに応じて割り引く_名前で指定(String rank) throws SQLException {
+            // Given
+            jigu.importFrom(DATA + "place_by_rank_named/given.txt", rank);
+
+            // When
+            service.placeOrder("A001", "C001", List.of(new OrderLine("P002", 10)));
+
+            // Then
+            jigu.assertExists(DATA + "place_by_rank_named/expected.txt", rank);
         }
     }
 

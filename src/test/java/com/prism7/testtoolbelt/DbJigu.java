@@ -8,6 +8,7 @@ package com.prism7.testtoolbelt;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,15 +32,17 @@ import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.2.0
+ * DB治具（DbJigu） v2.3.0
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -87,9 +90,15 @@ import java.util.stream.Collectors;
  *
  * <h2>パターン番号</h2>
  * ヘッダーの先頭を {@code #} にすると、各行の先頭の項目がパターン番号になる。
- * パターン番号は {@code 1,2} のように複数指定でき、空にすると全パターン共通の行になる。
- * 各メソッドにパターン番号を渡すと、そのパターンの行と共通の行だけを処理する。
+ * パターン番号には数値か名前（{@code gold} など）を書ける。
+ * {@code 1,2} や {@code gold,silver} のように複数指定でき、空にすると全パターン共通の行になる。
+ * 各メソッドにパターン番号（{@code int} か {@code String}）を渡すと、そのパターンの行と共通の行だけを処理する。
  * パターン番号を渡さない場合は全行を処理する。{@code #} の無いテーブルの行は常に処理する。
+ * <ul>
+ *   <li>名前の大文字と小文字は区別しない（{@code Gold} と {@code gold} は同じ）。</li>
+ *   <li>数値として読めるものは数値として比べる（{@code 01}、{@code +1}、全角の {@code １} は {@code 1} と同じ）。</li>
+ *   <li>名前には {@code |} と {@code ,} を使えない。前後の空白は取り除く。</li>
+ * </ul>
  *
  * <h2>利用例（Spring の {@code @Transactional} テスト）</h2>
  * <pre>
@@ -109,6 +118,8 @@ public class DbJigu {
     private static final String COMMENT_PREFIX = "//";
     private static final String PATTERN_COLUMN = "#";
     private static final String PATTERN_SEPARATOR = ",";
+    // 以前の Integer.parseInt と同じく、全角の １ などの Unicode の数字も数値として読む（BigInteger も読める）
+    private static final Pattern INTEGER = Pattern.compile("[+-]?\\p{Nd}+");
     private static final String MARK_CHARACTERS = "@<>=!%";
     private static final char LIKE_ESCAPE = '!';
 
@@ -134,13 +145,168 @@ public class DbJigu {
     }
 
     /**
-     * ファイルをDBに投入する
+     * ファイルの全行をDBに投入する
      *
      * @param filePath 投入するファイル
-     * @param patterns 対象のパターン番号（省略時は全行）
+     * @return 投入した件数
+     */
+    public int importFrom(String filePath) {
+        return importRows(filePath);
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行をDBに投入する
+     *
+     * @param filePath 投入するファイル
+     * @param patterns 対象のパターン番号
      * @return 投入した件数
      */
     public int importFrom(String filePath, int... patterns) {
+        return importRows(filePath, toNames(patterns));
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行をDBに投入する
+     *
+     * @param filePath 投入するファイル
+     * @param patterns 対象のパターン番号（名前）
+     * @return 投入した件数
+     */
+    public int importFrom(String filePath, String... patterns) {
+        return importRows(filePath, patterns);
+    }
+
+    /**
+     * ファイルの各行がDBに存在するか検証する
+     *
+     * @param filePath 検証するファイル
+     * @return 存在しなかった行の件数（0なら成功）
+     */
+    public int verifyExists(String filePath) {
+        return verify(filePath, true).size();
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在するか検証する
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号
+     * @return 存在しなかった行の件数（0なら成功）
+     */
+    public int verifyExists(String filePath, int... patterns) {
+        return verify(filePath, true, toNames(patterns)).size();
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在するか検証する
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号（名前）
+     * @return 存在しなかった行の件数（0なら成功）
+     */
+    public int verifyExists(String filePath, String... patterns) {
+        return verify(filePath, true, patterns).size();
+    }
+
+    /**
+     * ファイルの各行がDBに存在しないことを検証する
+     *
+     * @param filePath 検証するファイル
+     * @return 存在した行の件数（0なら成功）
+     */
+    public int verifyNotExists(String filePath) {
+        return verify(filePath, false).size();
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在しないことを検証する
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号
+     * @return 存在した行の件数（0なら成功）
+     */
+    public int verifyNotExists(String filePath, int... patterns) {
+        return verify(filePath, false, toNames(patterns)).size();
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在しないことを検証する
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号（名前）
+     * @return 存在した行の件数（0なら成功）
+     */
+    public int verifyNotExists(String filePath, String... patterns) {
+        return verify(filePath, false, patterns).size();
+    }
+
+    /**
+     * ファイルの各行がDBに存在することを検証し、存在しない行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     */
+    public void assertExists(String filePath) {
+        assertVerified(filePath, true, "DBに存在しない行があります: ");
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在することを検証し、存在しない行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号
+     */
+    public void assertExists(String filePath, int... patterns) {
+        assertVerified(filePath, true, "DBに存在しない行があります: ", toNames(patterns));
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在することを検証し、存在しない行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号（名前）
+     */
+    public void assertExists(String filePath, String... patterns) {
+        assertVerified(filePath, true, "DBに存在しない行があります: ", patterns);
+    }
+
+    /**
+     * ファイルの各行がDBに存在しないことを検証し、存在する行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     */
+    public void assertNotExists(String filePath) {
+        assertVerified(filePath, false, "DBに存在する行があります: ");
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在しないことを検証し、存在する行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号
+     */
+    public void assertNotExists(String filePath, int... patterns) {
+        assertVerified(filePath, false, "DBに存在する行があります: ", toNames(patterns));
+    }
+
+    /**
+     * ファイルのうち、指定したパターンの行と共通の行がDBに存在しないことを検証し、存在する行があれば AssertionError を投げる
+     *
+     * @param filePath 検証するファイル
+     * @param patterns 対象のパターン番号（名前）
+     */
+    public void assertNotExists(String filePath, String... patterns) {
+        assertVerified(filePath, false, "DBに存在する行があります: ", patterns);
+    }
+
+    // パターン番号（数値）を、名前と同じ扱いにするため文字列にする
+    private static String[] toNames(int[] patterns) {
+        if (patterns == null) {
+            throw new IllegalArgumentException("パターン番号に null は渡せません");
+        }
+        return Arrays.stream(patterns).mapToObj(String::valueOf).toArray(String[]::new);
+    }
+
+    private int importRows(String filePath, String... patterns) {
         int total = 0;
         for (Section section : readFile(filePath, patterns)) {
             if (section.rows.isEmpty()) {
@@ -174,50 +340,8 @@ public class DbJigu {
         return total;
     }
 
-    /**
-     * ファイルの各行がDBに存在するか検証する
-     *
-     * @param filePath 検証するファイル
-     * @param patterns 対象のパターン番号（省略時は全行）
-     * @return 存在しなかった行の件数（0なら成功）
-     */
-    public int verifyExists(String filePath, int... patterns) {
-        return verify(filePath, true, patterns).size();
-    }
-
-    /**
-     * ファイルの各行がDBに存在しないことを検証する
-     *
-     * @param filePath 検証するファイル
-     * @param patterns 対象のパターン番号（省略時は全行）
-     * @return 存在した行の件数（0なら成功）
-     */
-    public int verifyNotExists(String filePath, int... patterns) {
-        return verify(filePath, false, patterns).size();
-    }
-
-    /**
-     * ファイルの各行がDBに存在することを検証し、存在しない行があれば AssertionError を投げる
-     *
-     * @param filePath 検証するファイル
-     * @param patterns 対象のパターン番号（省略時は全行）
-     */
-    public void assertExists(String filePath, int... patterns) {
-        assertVerified(filePath, true, "DBに存在しない行があります: ", patterns);
-    }
-
-    /**
-     * ファイルの各行がDBに存在しないことを検証し、存在する行があれば AssertionError を投げる
-     *
-     * @param filePath 検証するファイル
-     * @param patterns 対象のパターン番号（省略時は全行）
-     */
-    public void assertNotExists(String filePath, int... patterns) {
-        assertVerified(filePath, false, "DBに存在する行があります: ", patterns);
-    }
-
     // 検証を行い、期待と異なった行があれば AssertionError を投げる
-    private void assertVerified(String filePath, boolean expectExists, String message, int... patterns) {
+    private void assertVerified(String filePath, boolean expectExists, String message, String... patterns) {
         List<String> failures = verify(filePath, expectExists, patterns);
         if (!failures.isEmpty()) {
             throw new AssertionError(message + filePath + System.lineSeparator()
@@ -226,7 +350,7 @@ public class DbJigu {
     }
 
     // 検証を行い、期待と異なった行の一覧を返す
-    private List<String> verify(String filePath, boolean expectExists, int... patterns) {
+    private List<String> verify(String filePath, boolean expectExists, String... patterns) {
         List<Section> sections = readFile(filePath, patterns);
         if (sections.stream().allMatch(s -> s.rows.isEmpty())) {
             throw new IllegalArgumentException("検証対象の行がありません: " + filePath);
@@ -459,7 +583,7 @@ public class DbJigu {
     }
 
     // ファイルを読み込み、対象のパターンの行だけを持つセクションの一覧を返す
-    private static List<Section> readFile(String filePath, int... patterns) {
+    private static List<Section> readFile(String filePath, String... patterns) {
         List<String> lines;
         try {
             lines = Files.readAllLines(Path.of(filePath), StandardCharsets.UTF_8);
@@ -467,8 +591,19 @@ public class DbJigu {
             throw new UncheckedIOException("ファイルを読み込めません: " + filePath, e);
         }
 
-        Set<Integer> targetPatterns = Arrays.stream(patterns).boxed().collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Integer> foundPatterns = new LinkedHashSet<>();
+        if (patterns == null) {
+            throw new IllegalArgumentException("パターン番号に null は渡せません");
+        }
+        // 比べるための形（patternKey）と、エラーメッセージに出すための渡された値
+        Map<String, String> targetPatterns = new LinkedHashMap<>();
+        for (String pattern : patterns) {
+            if (pattern == null || pattern.isBlank() || pattern.contains(PATTERN_SEPARATOR) || pattern.contains(SEPARATOR)) {
+                throw new IllegalArgumentException("パターン番号に使えない値です: " + pattern);
+            }
+            String name = pattern.trim();
+            targetPatterns.putIfAbsent(patternKey(name), name);
+        }
+        Set<String> foundPatterns = new LinkedHashSet<>();
         List<Section> sections = new ArrayList<>();
         String tableName = null;
         int tableLineNumber = 0;
@@ -507,7 +642,7 @@ public class DbJigu {
                 Row row = parseRow(filePath, lineNumber, section, line);
                 foundPatterns.addAll(row.patterns);
                 if (targetPatterns.isEmpty() || row.patterns.isEmpty()
-                        || !Collections.disjoint(row.patterns, targetPatterns)) {
+                        || !Collections.disjoint(row.patterns, targetPatterns.keySet())) {
                     section.rows.add(row);
                 }
             }
@@ -516,8 +651,8 @@ public class DbJigu {
         requireHeader(filePath, tableName, tableLineNumber, section);
 
         // パターン番号の指定間違いで、何も検証せずに成功するのを防ぐ
-        Set<Integer> missing = new LinkedHashSet<>(targetPatterns);
-        missing.removeAll(foundPatterns);
+        List<String> missing = targetPatterns.entrySet().stream()
+                .filter(e -> !foundPatterns.contains(e.getKey())).map(Map.Entry::getValue).toList();
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException("パターン番号 " + missing + " の行がありません: " + filePath);
         }
@@ -557,16 +692,16 @@ public class DbJigu {
 
     private static Row parseRow(String filePath, int lineNumber, Section section, String line) {
         List<String> values = split(line);
-        Set<Integer> rowPatterns = new LinkedHashSet<>();
+        Set<String> rowPatterns = new LinkedHashSet<>();
         if (section.hasPattern) {
             String patternText = values.get(0);
             if (!patternText.isEmpty()) {
                 for (String p : patternText.split(PATTERN_SEPARATOR, -1)) {
-                    try {
-                        rowPatterns.add(Integer.parseInt(p.trim()));
-                    } catch (NumberFormatException e) {
-                        throw formatError(filePath, lineNumber, "パターン番号が数値ではありません: " + patternText);
+                    String name = p.trim();
+                    if (name.isEmpty()) {
+                        throw formatError(filePath, lineNumber, "空のパターン番号があります: " + patternText);
                     }
+                    rowPatterns.add(patternKey(name));
                 }
             }
             values = values.subList(1, values.size());
@@ -577,6 +712,13 @@ public class DbJigu {
         }
         List<String> converted = values.stream().map(v -> v.equals(NULL_VALUE) ? null : v).toList();
         return new Row(lineNumber, line, rowPatterns, converted);
+    }
+
+    // パターン番号を比べるための形。数値として読めるものは数値として（01 と 1 を同じに）、
+    // それ以外は大文字と小文字を区別せずに比べる
+    private static String patternKey(String pattern) {
+        return INTEGER.matcher(pattern).matches()
+                ? new BigInteger(pattern).toString() : pattern.toLowerCase(Locale.ROOT);
     }
 
     // 区切り文字で分割し、各項目の前後の空白を除く（末尾の空の項目も残す）
@@ -631,6 +773,6 @@ public class DbJigu {
     private record Column(String name, Operator operator) {
     }
 
-    private record Row(int lineNumber, String text, Set<Integer> patterns, List<String> values) {
+    private record Row(int lineNumber, String text, Set<String> patterns, List<String> values) {
     }
 }

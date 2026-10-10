@@ -1,0 +1,8 @@
+// パターン番号に名前を使う例。大文字と小文字は区別せず、数値として読めるものは数値として比べる
+[Member]
+{#|MemberId|MemberName}
+|0|common
+gold|1|john
+Silver|2|sam
+GOLD, silver|3|both
+01|4|mike
