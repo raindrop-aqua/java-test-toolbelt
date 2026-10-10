@@ -7,19 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { EDITOR } = require('./load-core');
-
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  ];
-  return candidates.find(p => p && fs.existsSync(p));
-}
+const { findChrome, chromeArgs } = require('./chrome');
 
 // ハーネスを埋め込んだページを開き、操作の結果を受け取る
 function runHarness(chrome) {
@@ -29,11 +17,7 @@ function runHarness(chrome) {
     const html = fs.readFileSync(EDITOR, 'utf8').replace('</body>', `<script>${harness}</script></body>`);
     const page = path.join(dir, 'page.html');
     fs.writeFileSync(page, html);
-    const args = [
-      '--headless=new', '--disable-gpu', '--no-first-run', `--user-data-dir=${path.join(dir, 'profile')}`,
-      '--virtual-time-budget=3000', '--dump-dom', 'file://' + page,
-    ];
-    if (process.platform === 'linux') args.unshift('--no-sandbox');
+    const args = chromeArgs(path.join(dir, 'profile'), '--virtual-time-budget=3000', '--dump-dom', 'file://' + page);
     const dom = execFileSync(chrome, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 });
     // ページに埋め込んだスクリプトの文字列にも一致しないよう、最後に追加された要素を使う
     const match = [...dom.matchAll(/<pre id="result">([\s\S]*?)<\/pre>/g)].pop();
