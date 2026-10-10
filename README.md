@@ -19,6 +19,8 @@ jigu.assertNotExists("src/test/resources/data/deleted.txt");
 int mismatches = jigu.verifyExists("src/test/resources/data/expected.txt"); // returns the count instead
 ```
 
+When a row does not match, the message also shows which column differed and its value in the DB, found by searching again with one condition left out at a time (`stock を除くと一致する行があります。DB の値: 99`).
+
 DbJigu never commits, rolls back, or closes the connection you pass in.
 
 ### With Spring (Spring Boot + Spring Data JPA)

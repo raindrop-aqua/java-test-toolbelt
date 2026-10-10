@@ -19,6 +19,8 @@ jigu.assertNotExists("src/test/resources/data/deleted.txt");
 int mismatches = jigu.verifyExists("src/test/resources/data/expected.txt"); // 例外の代わりに件数を返す
 ```
 
+一致しない行があると、条件を1つずつ外して検索し直し、どの列が違ったかと、その列の DB の値もメッセージに表示します（`stock を除くと一致する行があります。DB の値: 99`）。
+
 DbJigu は、渡された Connection のコミット、ロールバック、クローズを行いません。
 
 ### Spring（Spring Boot + Spring Data JPA）での使い方

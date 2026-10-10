@@ -674,16 +674,31 @@ SELECT 1 FROM orders WHERE order_no = ? AND status = ? AND note LIKE ? ESCAPE '!
 ○: src/test/resources/data/order/cancel/expected.txt:3 [orders] A001|CANCELED|キャンセル: お客様都合|2024-04-01 10:00
 ○: src/test/resources/data/order/cancel/expected.txt:7 [order_item] A002|1
 ×: src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
+    stock を除くと一致する行があります。DB の値: 99
 ○: src/test/resources/data/order/cancel/expected.txt:12 [product] P002|50
 ```
 
 `assertExists` が失敗すると、`×` の行が `AssertionError` のメッセージに入ります。`ファイル:行番号` から、どの行が一致しなかったかが分かります。
+
+`×` の行の下には、どの列が違ったかの手がかりを表示します。DbJigu は、その行の条件を1つずつ外して DB を検索し直し、外すと一致する列と、その列の DB の値を表示します。上の例では、`stock` を除くと一致する行があり、DB の在庫は 99 だったことが分かります。
+
+| 表示 | 意味 |
+|---|---|
+| `列 を除くと一致する行があります。DB の値: 値` | その列だけが違う。DB の値は、重複を除いて最大3件（それ以上は「ほか」）。値を集めるのは一致した行の先頭100行までで、それを超える行があるときも「ほか」を付ける |
+| `1つの列を除いても一致する行はありません（…）` | 2つ以上の列が違うか、該当する行がそもそも無い |
+| `テーブルに行がありません` | テーブルが空 |
+| `一致した DB の行: 列=値 / …` | `assertNotExists` で、あってはいけない行が見つかった。記号付きの列（`!=` `>` `%` など）の値を最大3行表示する（記号の無い列はファイルと同じ値なので表示しない） |
+
+- 記号付きの列も、条件の1つとして外して調べます（`ordered_at>=` を除くと一致する、など）。
+- 調べるための SQL は、失敗した行についてだけ実行します。成功するテストの速さは変わりません。
+- 1回の検証で調べるのは、失敗した行の先頭10行までです。それ以降は「ほか n 行は、違った列を調べていません」と表示します。
 
 行は、値の前後の空白を除いて `|` でつなぎ直したものを表示します。`|` の位置を空白で揃えたファイルでも、`A001|C001|RECEIVED` のように表示されます。
 
 ```
 java.lang.AssertionError: DBに存在しない行があります: src/test/resources/data/order/cancel/expected.txt
 src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
+    stock を除くと一致する行があります。DB の値: 99
 ```
 
 ---
@@ -800,6 +815,7 @@ DbJigu は投入したデータを削除しません。テストのトランザ�
 
 | 確かめること | 対処 |
 |---|---|
+| `×` の行の下に、違った列が表示されているか | 「列 を除くと一致する行があります。DB の値: …」の列と値を確かめる（[5.3](#53-失敗したときの出力)） |
 | JPA の変更を flush したか | 検証の前に `entityManager.flush()` を呼ぶ |
 | 同じ Connection を使っているか | Spring では `DataSourceUtils.getConnection(dataSource)` を使う |
 | 日時の秒やミリ秒まで一致しているか | 必要な精度まで書くか、`>=` と `<` の範囲で比較する |
