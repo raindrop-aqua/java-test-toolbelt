@@ -13,7 +13,7 @@ Because of how it is distributed, `DbJigu.java` must:
 - keep working on several databases. The main target is PostgreSQL, and Oracle should keep working too, because it has been used there. Avoid DB-specific SQL.
 - never commit, roll back, or close the `Connection` it is given. In Spring tests, callers pass `DataSourceUtils.getConnection(dataSource)` so the test transaction can roll back.
 - throw on errors instead of swallowing them, so that a mistake can never pass silently.
-- record its version in the class Javadoc (`v2.3.0`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
+- record its version in the class Javadoc (`v2.3.1`) and in `build.gradle`. Bump it when behavior changes so users can tell which version they copied.
 - keep the MIT license notice in the comment above `package`. Users copy only this file, so the notice has to travel with it (`LICENSE` holds the full text).
 
 ## Commands
@@ -105,7 +105,7 @@ node --test tools/test/*.test.js     # FixtureCore and the UI (no npm packages n
 - `ime.test.js` drives the page through the Chrome DevTools Protocol (`chrome.js`) to send IME input (`Input.imeSetComposition`), which `--dump-dom` can't do. It needs Node 22 or later for the built-in `WebSocket`, and is skipped without it or without Chrome, except in CI.
 - Keyboard handlers must ignore keys while an IME is composing (`isComposing`, `keyCode` 229, or between `compositionstart` and `compositionend`). Otherwise the Enter that confirms a conversion also moves to the next row, and the confirmed text is typed again there (#27).
 - GitHub Actions runs these in the `fixture-editor` job.
-- When a change could affect what DbJigu reads (parsing or alignment), also run `./gradlew test` against a copy of the repo whose fixtures were rewritten with aligned output. The only expected failure is the test in `DbJiguTest` that checks the raw row text in the error message.
+- When a change could affect what DbJigu reads (parsing or alignment), also run `./gradlew test` against a copy of the repo whose fixtures were rewritten with aligned output. Every test should pass: since v2.3.1, the rows shown in verification output are the trimmed values joined with `|`, so padding doesn't appear in messages.
 
 ## Code review
 

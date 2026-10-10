@@ -86,6 +86,14 @@ class DbJiguTest {
         assertTrue(error.getMessage().contains("sample.txt:12 [Member] 2|sam"), error.getMessage());
     }
 
+    @Test
+    void 失敗した行は揃えた空白を除いて表示する(@TempDir Path dir) {
+        // フィクスチャエディタで桁揃えした行。パターン番号と <null> は書いたとおりに表示する
+        String file = write(dir, "[Member]", "{#  |MemberId|MemberName}", " 1,2|9       |<null>");
+        AssertionError error = assertThrows(AssertionError.class, () -> jigu.assertExists(file));
+        assertTrue(error.getMessage().contains("fixture.txt:3 [Member] 1,2|9|<null>"), error.getMessage());
+    }
+
     @Nested
     class パターン番号 {
 

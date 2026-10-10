@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * DB治具（DbJigu） v2.3.0
+ * DB治具（DbJigu） v2.3.1
  * <p>
  * テキストファイル（フィクスチャ）を使って、テストデータのDB投入とDB内容の検証を行う。
  * 依存ライブラリは無く、JDK（Java 17以上）と JDBC ドライバだけで動作する。
@@ -692,6 +692,8 @@ public class DbJigu {
 
     private static Row parseRow(String filePath, int lineNumber, Section section, String line) {
         List<String> values = split(line);
+        // 検証の結果に表示する行。桁揃えなどの空白を除いた値をつなぎ直す（書いたままだと読みにくい）
+        String text = String.join(SEPARATOR, values);
         Set<String> rowPatterns = new LinkedHashSet<>();
         if (section.hasPattern) {
             String patternText = values.get(0);
@@ -711,7 +713,7 @@ public class DbJigu {
                     "列数(" + section.columns.size() + ")と値の数(" + values.size() + ")が一致しません");
         }
         List<String> converted = values.stream().map(v -> v.equals(NULL_VALUE) ? null : v).toList();
-        return new Row(lineNumber, line, rowPatterns, converted);
+        return new Row(lineNumber, text, rowPatterns, converted);
     }
 
     // パターン番号を比べるための形。数値として読めるものは数値として（01 と 1 を同じに）、
