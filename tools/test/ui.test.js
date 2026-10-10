@@ -48,6 +48,15 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.deepEqual(result.steps.loaded, { sections: 2, status: '✓ 問題なし' });
   });
 
+  test('行・列の操作ボタンの表示を切り替える（既定は表示。行番号は常に表示）', () => {
+    const visible = { checked: true, rowTools: 'inline-flex', colTools: 'flex', lineNumber: 'inline-block' };
+    assert.deepEqual(result.steps.tools, {
+      initial: visible,
+      off: { checked: false, rowTools: 'none', colTools: 'none', lineNumber: 'inline-block' },
+      on: visible,
+    });
+  });
+
   test('編集・行の追加・Alt+N・列の追加', () => {
     assert.equal(result.steps.altN, '<null>');
     assert.equal(result.steps.addColumn, 'エラー 1 / 警告 0');

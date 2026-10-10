@@ -103,7 +103,8 @@ A001|100|200|CANCELED|Express|-
 
 [`tools/fixture-editor.html`](tools/fixture-editor.html) edits fixtures as tables. Download the file and open it in a browser. It needs no installation and sends nothing over the network.
 
-- Edit each table as a grid, then save it. With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
+- Edit each table as a grid, then save it. The row and column buttons (move, add, duplicate, comment out, delete) can be hidden with "行・列の操作" (row and column tools) in the toolbar.
+- With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
 - It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or a pattern number that isn't a number) and shows the line numbers.
 - Choose a pattern number to dim the rows that are not part of it, and see how many rows each table has per pattern.
 - Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.
