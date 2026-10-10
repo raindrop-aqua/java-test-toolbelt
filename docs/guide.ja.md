@@ -679,6 +679,8 @@ SELECT 1 FROM orders WHERE order_no = ? AND status = ? AND note LIKE ? ESCAPE '!
 
 `assertExists` が失敗すると、`×` の行が `AssertionError` のメッセージに入ります。`ファイル:行番号` から、どの行が一致しなかったかが分かります。
 
+行は、値の前後の空白を除いて `|` でつなぎ直したものを表示します。`|` の位置を空白で揃えたファイルでも、`A001|C001|RECEIVED` のように表示されます。
+
 ```
 java.lang.AssertionError: DBに存在しない行があります: src/test/resources/data/order/cancel/expected.txt
 src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
@@ -731,7 +733,7 @@ PostgreSQL の `IDENTITY` や `serial` の列に値を指定して投入して�
 [tools/fixture-editor.html](../tools/fixture-editor.html) をブラウザで開くと、フィクスチャを表の形で編集できます。
 
 - 列数の不一致やパターン番号の書き間違いなど、DbJigu が例外にする誤りを、テストを実行する前に見つけられます。
-- 「桁揃え」で保存すると `|` の位置が縦に揃います。値の前後の空白は取り除かれるので、意味は変わりません。ただし、検証が失敗したときのメッセージには、揃えた空白を含む行がそのまま表示されます。
+- 「桁揃え」で保存すると `|` の位置が縦に揃います。値の前後の空白は取り除かれるので、意味は変わりません。検証の結果にも、揃えた空白を除いた行が表示されます（[5.3](#53-失敗したときの出力)）。
 - パターン番号で絞り込むと、そのパターンで投入・検証される行（そのパターンの行と共通の行）だけが濃く表示されます。
 - Excel で作ったデータは、範囲をコピーしてセルに貼り付けられます。
 

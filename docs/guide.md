@@ -679,6 +679,8 @@ Verification prints a result for each row of the file to the console (`○` mean
 
 When `assertExists` fails, the `×` rows go into the `AssertionError` message. The `file:line` tells you which row did not match. (The message text is Japanese; it means "rows not found in the DB".)
 
+Each row is shown with the spaces around its values removed and the values joined again with `|`. Even in a file whose `|` characters are lined up with spaces, a row is shown as `A001|C001|RECEIVED`.
+
 ```
 java.lang.AssertionError: DBに存在しない行があります: src/test/resources/data/order/cancel/expected.txt
 src/test/resources/data/order/cancel/expected.txt:11 [product] P001|98
@@ -731,7 +733,7 @@ A comment cannot start in the middle of a line. The `//` in `A001|https://exampl
 Open [tools/fixture-editor.html](../tools/fixture-editor.html) in a browser to edit fixtures as tables.
 
 - It finds the mistakes that DbJigu throws an exception for, such as a row whose number of values doesn't match the header or a pattern number that isn't a number, before you run the test.
-- When you save with "桁揃え" (align) on, the `|` characters are lined up. Fields are trimmed, so the meaning doesn't change. However, when verification fails, the message shows the row as written, including the padding.
+- When you save with "桁揃え" (align) on, the `|` characters are lined up. Fields are trimmed, so the meaning doesn't change. The verification output also shows rows without the padding ([5.3](#53-output-on-failure)).
 - When you choose a pattern number, only the rows imported or verified for that pattern (its own rows and the common rows) are shown at full strength.
 - You can copy a range from Excel and paste it into a cell.
 
