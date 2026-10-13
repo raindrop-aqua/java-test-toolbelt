@@ -781,7 +781,8 @@ In these cases, delete the data yourself after the test.
 | A value containing `\|` | It is the separator, and there is no way to escape it |
 | A value with leading or trailing spaces | Spaces around values are removed |
 | The string `<null>` | It means NULL |
-| A value that puts `[` or `{` at the start of a line | The line is read as a table name or column list (under discussion in [#12](https://github.com/raindrop-aqua/java-test-toolbelt/issues/12)) |
+| A value containing a line break | Each line is read as one row. Write JSON and similar values on a single line |
+| A value that puts `[` or `{` at the start of a line | The line is read as a table name or column list. Put a JSON column anywhere but first (in a table with pattern numbers, a row starts with the pattern field, so the first column is fine too) |
 | A value that starts a line with `//` | The line is read as a comment |
 | A comment in the middle of a line | Only a `//` at the start of a line makes a comment. A line starting with `#` is read as a data row |
 
