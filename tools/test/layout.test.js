@@ -1,5 +1,6 @@
 // 画面の配置のテスト（#38）。列や行が多い表をメインの領域でスクロールし、列名の行・行番号・テーブル名が
-// 固定されること、移動先のセルが固定された部分の下に隠れないこと、サイドパネルの開閉を確かめる。
+// 固定されること、移動先のセルが固定された部分の下に隠れないこと、サイドパネルの開閉、
+// テーブルの一覧からの移動（#39）を確かめる。
 // Chrome DevTools Protocol で画面の大きさを決め、キーを送る。Chrome が無ければスキップする。WebSocket は Node 22 以降で使える
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,7 +17,7 @@ test('CI では配置のテストを実行できる', { skip: !process.env.CI },
   assert.equal(skip, false, skip || '');
 });
 
-// 12 列 × 35 行の表と、小さな表
+// 12 列 × 35 行の表、小さな表、縦に長い表
 const COLS = Array.from({ length: 12 }, (_, i) => 'column_' + (i + 1));
 const FIXTURE = [
   '[wide]',
@@ -26,6 +27,10 @@ const FIXTURE = [
   '[small]',
   '{a|b}',
   '1|2',
+  '',
+  '[tall]',
+  '{id}',
+  ...Array.from({ length: 35 }, (_, r) => String(r + 1)),
   '',
 ].join('\n');
 
@@ -150,6 +155,31 @@ test.describe('画面の配置', { skip }, () => {
     assert.deepEqual(await rect('#main'), main, 'メインの領域の大きさは変わらない');
     await press('Escape', 27);
     assert.equal(await page.evaluate(`document.getElementById('layout').classList.contains('side-open')`), false, 'Esc で閉じる');
+  });
+
+  test('テーブルの一覧をクリックすると、そのテーブルの見出しが見える位置までスクロールする', async () => {
+    await open(1200, 700);
+    await scroll(0, 9999);
+    await page.evaluate(`document.getElementById('tabTables').click()`);
+    await page.evaluate(`document.querySelector('#tables button[data-s="1"]').click()`);
+    const main = await rect('#main');
+    const name = await rect('section[data-s="1"] input.tname');
+    assert.ok(name.top >= main.top && name.bottom <= main.top + 80, `テーブル名 ${JSON.stringify(name)} が上に見える`);
+    assert.equal(await page.evaluate(`document.getElementById('main').scrollLeft`), 0, '左端に戻る');
+    assert.equal(await page.evaluate(`document.getElementById('layout').classList.contains('side-open')`), true, '幅が広いときは開いたまま');
+    // 最初のテーブルへ戻る
+    await page.evaluate(`document.querySelector('#tables button[data-s="0"]').click()`);
+    assert.equal(await page.evaluate(`document.getElementById('main').scrollTop`), 0);
+  });
+
+  test('ドロワーのテーブルの一覧から移動すると、ドロワーを閉じる', async () => {
+    await open(760, 640);
+    await page.evaluate(`document.getElementById('tabTables').click()`);
+    await page.evaluate(`document.querySelector('#tables button[data-s="1"]').click()`);
+    assert.equal(await page.evaluate(`document.getElementById('layout').classList.contains('side-open')`), false);
+    const main = await rect('#main');
+    const name = await rect('section[data-s="1"] input.tname');
+    assert.ok(name.top >= main.top && name.bottom <= main.bottom, `テーブル名 ${JSON.stringify(name)} が見える`);
   });
 
   test('テキスト表示では、テキストの欄がメインの領域の高さいっぱいになる', async () => {

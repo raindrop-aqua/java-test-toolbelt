@@ -26,6 +26,9 @@
     return value;
   };
   const status = () => $('status').textContent;
+  // テーブルの一覧（番号・名前・エラーと警告・行数）
+  const tableList = () => [...document.querySelectorAll('#tables button')]
+    .map(b => [...b.children].map(c => c.textContent));
 
   try {
     // テキストで読み込んで表に切り替える
@@ -45,6 +48,7 @@
     fire($('text'), 'input');
     $('btnGrid').click();
     result.steps.loaded = { sections: document.querySelectorAll('section.sec').length, status: status() };
+    result.steps.tables = tableList();
 
     // 行・列の操作ボタンの表示の切り替え（行番号は常に表示する）
     const shown = () => ({
@@ -92,6 +96,7 @@
     result.steps.filter = {
       options: [...$('selFilter').options].map(o => o.value),
       dimRows: document.querySelectorAll('tr.dim').length,
+      tables: tableList(),
     };
     $('selFilter').value = '';
     fire($('selFilter'), 'change');
@@ -111,7 +116,7 @@
     $('text').value = '[t]\n{a|b|c}\n1\n';
     fire($('text'), 'input');
     $('btnGrid').click();
-    result.steps.mismatch = { status: status(), missingCells: document.querySelectorAll('input.missing').length };
+    result.steps.mismatch = { status: status(), missingCells: document.querySelectorAll('input.missing').length, tables: tableList() };
     q('#issues [data-fix]').click();
     result.steps.fixed = { status: status(), text: text() };
 
@@ -131,6 +136,16 @@
     $('selFilter').value = '';
     fire($('selFilter'), 'change');
 
+    // テキスト表示では、一覧のクリックでテーブル名の行を選択する
+    $('btnText').click();
+    $('text').value = '[a]\n{x}\n1\n\n[b]\n{y}\n2\n';
+    // 入力のチェックは遅れて行われるので、整形でその場でチェックして一覧を作り直す
+    $('btnFormat').click();
+    q('#tables button[data-s="1"]').click();
+    const ta = $('text');
+    result.steps.textJump = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    $('btnGrid').click();
+
     // 書式の誤りがあると表に切り替えられない
     $('btnText').click();
     $('text').value = '[t]\n1\n';
@@ -139,6 +154,7 @@
     result.steps.fatal = {
       mode: $('textView').style.display === 'none' ? 'grid' : 'text',
       issues: $('issues').textContent,
+      tables: $('tables').textContent,
     };
   } catch (e) {
     result.errors.push(e.stack || String(e));

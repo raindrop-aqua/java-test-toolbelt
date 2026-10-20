@@ -48,6 +48,10 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.deepEqual(result.steps.loaded, { sections: 2, status: '✓ 問題なし' });
   });
 
+  test('テーブルの一覧を、ファイルの順に行数とともに表示する', () => {
+    assert.deepEqual(result.steps.tables, [['1.', 'customer', '', '2 行'], ['2.', 'product', '', '1 行']]);
+  });
+
   test('行・列の操作ボタンの表示を切り替える（既定は表示。行番号は常に表示）', () => {
     const visible = { checked: true, rowTools: 'inline-flex', colTools: 'flex', lineNumber: 'inline-block' };
     assert.deepEqual(result.steps.tools, {
@@ -94,7 +98,12 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
   });
 
   test('パターンで絞り込む', () => {
-    assert.deepEqual(result.steps.filter, { options: ['', '1', '2', '3'], dimRows: 2 });
+    assert.deepEqual(result.steps.filter, {
+      options: ['', '1', '2', '3'],
+      dimRows: 2,
+      // 絞り込み中は、そのパターンで使う行（共通の行を含む）の数 / すべての行の数
+      tables: [['1.', 'customer', '', '1 / 3 行'], ['2.', 'product', '', '2 / 2 行']],
+    });
   });
 
   test('元に戻す・やり直す', () => {
@@ -106,7 +115,11 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
   });
 
   test('列数が合わない行を修正する', () => {
-    assert.deepEqual(result.steps.mismatch, { status: 'エラー 1 / 警告 0', missingCells: 2 });
+    assert.deepEqual(result.steps.mismatch, {
+      status: 'エラー 1 / 警告 0',
+      missingCells: 2,
+      tables: [['1.', 't', 'エラー 1', '1 行']],
+    });
     assert.deepEqual(result.steps.fixed, { status: '✓ 問題なし', text: '[t]\n{a|b|c}\n 1| |\n' });
   });
 
@@ -118,8 +131,13 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.equal(result.steps.namedAddRow, '[t]\n{#          |a}\n Gold       |1\n gold,SILVER|2\n            |3\n 02         |4\n Gold       |\n');
   });
 
+  test('テキスト表示では、一覧のクリックでテーブル名の行を選択する', () => {
+    assert.equal(result.steps.textJump, '[b]');
+  });
+
   test('書式の誤りがあると、テキストのまま誤りを表示する', () => {
     assert.equal(result.steps.fatal.mode, 'text');
     assert.match(result.steps.fatal.issues, /データの前に \{列名1\|列名2\} を記述してください/);
+    assert.equal(result.steps.fatal.tables, '書式の誤りがあるため、表示できません');
   });
 });
