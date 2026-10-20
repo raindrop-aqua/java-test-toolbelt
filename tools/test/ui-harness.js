@@ -174,6 +174,8 @@
     });
     focusCell(cell(0, 1, 1));
     result.steps.schemaView = schemaView();
+    // スキーマとのチェック（スキーマに無い列、必須の列）
+    result.steps.schemaIssues = [...document.querySelectorAll('#issues li')].map(li => li.textContent);
     // パネルの列をクリックすると、表のその列（入力中の行）へ移動する
     q('#schemaView li[data-col="order_no"]').click();
     result.steps.schemaJump = { s: document.activeElement.dataset.s, r: document.activeElement.dataset.r, f: document.activeElement.dataset.f };
@@ -207,6 +209,22 @@
     result.steps.expandChoices = [...document.querySelectorAll('#suggest [data-how]')].map(b => b.textContent);
     q('#suggest [data-how="required"]').click();
     result.steps.expanded = text();
+
+    // 列名の下に型を表示し、チェックボックスで切り替える
+    const types = () => [...document.querySelectorAll('section[data-s="2"] .coltype')].map(e => e.textContent);
+    const typesShown = () => getComputedStyle(q('section[data-s="2"] .coltype')).display;
+    result.steps.types = { texts: types(), shown: typesShown() };
+    $('chkTypes').click();
+    result.steps.types.hidden = typesShown();
+    $('chkTypes').click();
+
+    // 列名の候補は、まだ書いていない列だけを、型とともに出す。選ぶと型の行も変わる
+    q('section[data-s="2"] [data-act="sec-addcol"]').click();
+    type('input.cname[data-s="2"][data-f="3"]', '');
+    result.steps.columnSuggest = [...document.querySelectorAll('#suggest .opt')].map(o => o.textContent);
+    type('input.cname[data-s="2"][data-f="3"]', 'cr');
+    q('input.cname[data-s="2"][data-f="3"]').dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+    result.steps.columnChosen = { name: q('input.cname[data-s="2"][data-f="3"]').value, types: types() };
 
     // 書式の誤りがあると表に切り替えられない
     $('btnText').click();
