@@ -435,6 +435,7 @@ body.dragging #dropHint { display: flex; }
               <li>「スキーマ」タブで DDL（<code>CREATE TABLE</code> の <code>.sql</code> ファイル、または貼り付け）を登録すると、入力しているテーブルの列の一覧を表示する（✓ ファイルにある、⚠ 必須なのに無い、· 無い、▶ 今の列）。列をクリックすると表のその列へ移動する。登録した DDL はブラウザに保存され、「↻」で読み直す。</li>
               <li>DDL を登録すると、テーブル名を入力したときにテーブルの候補が出る（<kbd>↑</kbd> <kbd>↓</kbd> と <kbd>Enter</kbd> で選ぶ）。列がまだ無ければ、全列・必須の列だけ・主キーだけを展開できる。列名を入力すると、まだ書いていない列が型とともに候補に出る。</li>
               <li>DDL を登録すると、列名の下に型を表示する（ツールバーの「型」で切り替え）。スキーマに無い名前と、ファイルに無い必須の列は警告になる（必須の列の警告は、検証用のファイルなら問題ない）。</li>
+              <li>DDL を登録すると、値が列の型に合うか（日付の書式、整数の列の小数、<code>VARCHAR(n)</code> の文字数、真偽値など）と、外部キーの親が後ろにないか（投入の順序）も確かめる。</li>
               <li>「テーブル」タブ（右端のアイコン）には、ファイル内のテーブルが順に並ぶ。クリックするとそのテーブルへ移動する。</li>
               <li>このパネルは右端の <code>›</code> ボタン（または表示中のタブのアイコン）で閉じられる。画面の幅が狭いときは表の上に重なり、<kbd>Esc</kbd> か表を触ると閉じる。</li>
               <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
@@ -1141,6 +1142,7 @@ const SchemaCore = (() => {
   }
 
   const key = name => String(name).toLowerCase();
+  const sameKey = (a, b) => key(a) === key(b);
 
   function findTable(schema, name) {
     return schema ? schema.tables.get(key(name)) || null : null;
@@ -1201,6 +1203,131 @@ const SchemaCore = (() => {
       .map(x => x.c);
   }
 
+  // ---------- 値の型のチェック ----------
+  // DbJigu の bind と同じ規則で、値が列の型に変換できるかを確かめる。DbJigu は DB から読んだ JDBC の型で変換するが、
+  // エディタには DDL の型名しか無いので、型名から近い種類を決める。DbJigu の変換を変えたときは、ここも直す
+
+  const INT_TYPES = ['SMALLINT', 'INT', 'INTEGER', 'BIGINT', 'INT2', 'INT4', 'INT8', 'TINYINT', 'MEDIUMINT',
+    'SMALLSERIAL', 'SERIAL', 'BIGSERIAL', 'SERIAL2', 'SERIAL4', 'SERIAL8'];
+  const DECIMAL_TYPES = ['NUMERIC', 'DECIMAL', 'DEC', 'NUMBER'];
+  const REAL_TYPES = ['REAL', 'FLOAT4', 'BINARY_FLOAT'];
+  const DOUBLE_TYPES = ['FLOAT', 'FLOAT8', 'DOUBLE', 'DOUBLE PRECISION', 'BINARY_DOUBLE'];
+  const CHAR_TYPES = ['CHAR', 'CHARACTER', 'NCHAR', 'VARCHAR', 'VARCHAR2', 'NVARCHAR', 'NVARCHAR2', 'CHARACTER VARYING'];
+
+  // 型名から値の種類を決める。{ kind, length, precision, scale }。チェックしない型は null。
+  // 型名は括弧の前（head）と後（tail）に分ける（TIMESTAMP(6) WITH TIME ZONE、CHARACTER VARYING(10)）
+  function typeInfo(type) {
+    if (type.includes('[')) return null;
+    const open = type.indexOf('(');
+    const close = open < 0 ? -1 : type.indexOf(')', open);
+    const head = (open < 0 ? type : type.slice(0, open)).trim();
+    const args = open < 0 ? [] : type.slice(open + 1, close < 0 ? undefined : close).split(',').map(a => a.trim());
+    const tail = close < 0 ? '' : type.slice(close + 1).trim();
+    const num = a => (/^\d+/.test(a || '') ? Number(/^\d+/.exec(a)[0]) : null);
+    if (INT_TYPES.includes(head)) return { kind: 'int' };
+    // NUMBER(10) のように小数の桁数を省くと 0 桁。NUMBER だけなら桁数を決めない
+    if (DECIMAL_TYPES.includes(head)) {
+      const precision = num(args[0]);
+      return { kind: 'decimal', precision, scale: precision == null ? null : num(args[1]) ?? 0 };
+    }
+    if (REAL_TYPES.includes(head)) return { kind: 'float', single: true };
+    if (DOUBLE_TYPES.includes(head)) return { kind: 'float', single: false };
+    if (head === 'DATE') return { kind: 'date' };
+    if (head.split(' ')[0] === 'TIMESTAMP' || head === 'TIMESTAMPTZ' || head === 'DATETIME') return { kind: 'timestamp' };
+    // TIME WITH TIME ZONE は JDBC の型が DB によって違うので確かめない
+    if ((head === 'TIME' && !tail) || head === 'TIME WITHOUT TIME ZONE' || (head === 'TIME' && tail === 'WITHOUT TIME ZONE')) return { kind: 'time' };
+    if (head === 'BOOLEAN' || head === 'BOOL' || (head === 'BIT' && (args.length === 0 || args[0] === '1'))) return { kind: 'bool' };
+    // CHAR だけなら 1 文字。Oracle の VARCHAR2(10) はバイト数のこともあるが、文字数が超えていればバイト数も超える
+    if (CHAR_TYPES.includes(head)) {
+      const length = num(args[0]) ?? (['CHAR', 'CHARACTER', 'NCHAR'].includes(head) ? 1 : null);
+      return length == null ? null : { kind: 'char', length };
+    }
+    return null;
+  }
+
+  // BigDecimal として読める数を、数字の並び（先頭の 0 と末尾の小数の 0 を除く）と小数の桁数にする。読めなければ null
+  function decimalOf(value) {
+    const v = value.normalize('NFKC');
+    const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(v);
+    if (!m || (m[2] === '' && (m[3] || '') === '')) return null;
+    let digits = (m[2] + (m[3] || '')).replace(/^0+/, '');
+    let scale = (m[3] || '').length - Number(m[4] || 0);
+    while (scale > 0 && digits.endsWith('0')) {
+      digits = digits.slice(0, -1);
+      scale--;
+    }
+    return { negative: m[1] === '-', digits, scale: digits === '' ? 0 : scale };
+  }
+
+  const pad2 = s => s.padStart(2, '0');
+  const daysIn = (y, mo) => [31, (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  const validDate = (y, mo, d) => mo >= 1 && mo <= 12 && d >= 1 && d <= daysIn(y, mo);
+
+  // DbJigu の parseDateTime と同じく、/ を - に、T を空白にしてから、日付（10 文字以下）か日時として読む
+  function dateTimeProblem(value) {
+    const v = value.replaceAll('/', '-').replaceAll('T', ' ');
+    if (v.length <= 10) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+      if (!m) return '日付は 2024-01-31 の形式で書いてください';
+      return validDate(+m[1], +m[2], +m[3]) ? null : '存在しない日付です';
+    }
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2})(?:\.\d{0,9})?)?$/.exec(v);
+    if (!m) return '日時は 2024-01-31 10:00、2024-01-31 10:00:00 または 2024-01-31 10:00:00.123 の形式で書いてください';
+    if (!validDate(+m[1], +m[2], +m[3])) return '存在しない日付です';
+    return +m[4] <= 23 && +m[5] <= 59 && (m[6] == null || +m[6] <= 59) ? null : '存在しない時刻です';
+  }
+
+  const LONG_MAX = 9223372036854775807n;
+
+  // 値が列の型に合わなければ、その理由を返す。合えば null
+  function valueProblem(value, info) {
+    if (info.kind === 'char') {
+      const n = [...value].length;
+      return n > info.length ? `文字数（${n}）が ${info.length} を超えています` : null;
+    }
+    if (value === '') return '空文字は変換できません（NULL なら <null> と書いてください）';
+    switch (info.kind) {
+      case 'int':
+      case 'decimal':
+      case 'float': {
+        const d = decimalOf(value);
+        if (!d) return '数値ではありません';
+        if (info.kind === 'int') {
+          if (d.scale > 0) return '整数ではありません';
+          const n = BigInt(d.digits || '0') * 10n ** BigInt(-d.scale);
+          return (d.negative ? n > LONG_MAX + 1n : n > LONG_MAX) ? '整数の範囲を超えています' : null;
+        }
+        // DbJigu の toFloatingPoint と同じく、無限大になる値と、0 でないのに 0 になる値は範囲外
+        if (info.kind === 'float') {
+          const x = Number(value.normalize('NFKC'));
+          const converted = info.single ? Math.fround(x) : x;
+          return !Number.isFinite(converted) || (converted === 0 && d.digits !== '') ? '範囲外の値です' : null;
+        }
+        if (info.kind === 'decimal' && info.precision != null) {
+          if (d.scale > info.scale) {
+            return info.scale === 0 ? '整数ではありません（DB で丸められます）' : `小数の桁数が ${info.scale} 桁を超えています（DB で丸められます）`;
+          }
+          const intDigits = d.digits.length - d.scale;
+          if (intDigits > info.precision - info.scale) return `整数部の桁数が ${info.precision - info.scale} 桁を超えています`;
+        }
+        return null;
+      }
+      case 'date':
+      case 'timestamp':
+        return dateTimeProblem(value);
+      case 'time': {
+        const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+        if (!m) return '時刻は 10:00 または 10:00:00 の形式で書いてください（秒未満は書けません）';
+        return +m[1] <= 23 && +m[2] <= 59 && (m[3] == null || +m[3] <= 59) ? null : '存在しない時刻です';
+      }
+      case 'bool':
+        return ['true', 't', '1', 'yes', 'y', 'false', 'f', '0', 'no', 'n'].includes(value.toLowerCase())
+          ? null : '真偽値は true / false（t・1・yes・y / f・0・no・n）で書いてください';
+      default:
+        return null;
+    }
+  }
+
   // 登録したスキーマと照らし合わせたチェック。FixtureCore.lint と同じ形の指摘を返す。
   // DbJigu が例外にするかは DB しだいなので、どれも warn にする
   function lint(doc, schema) {
@@ -1224,6 +1351,26 @@ const SchemaCore = (() => {
           issues.push({ level: 'warn', s: si, r: 'h', f: ci + off, msg: `列 ${c.name} は ${table.name} のスキーマにありません${near(c.name, columnNames)}` });
         }
       });
+      // 値の型。@（比較しない）の列は、検証では値を使わないので確かめない
+      s.columns.forEach((c, ci) => {
+        const col = c.name && c.mark !== '@' ? findColumn(table, c.name) : null;
+        const info = col ? typeInfo(col.type) : null;
+        if (!info) return;
+        s.rows.forEach((row, ri) => {
+          if (row.kind !== 'data' || ci >= row.cells.length || row.cells[ci] === '<null>') return;
+          const problem = valueProblem(row.cells[ci], info);
+          if (problem) issues.push({ level: 'warn', s: si, r: ri, f: ci + off, msg: `列 ${c.name}（${col.type}）：${problem}` });
+        });
+      });
+      // 投入はファイルに書いた順に行うので、外部キーの親が後ろにしか無いと、投入で外部キーの制約に反する
+      for (const fk of table.fks) {
+        const parent = fk.ref.table;
+        if (!parent || sameKey(parent, table.name)) continue;
+        const idx = doc.sections.map((x, i) => (sameKey(x.name, parent) ? i : -1)).filter(i => i >= 0);
+        if (idx.length && idx.every(i => i > si)) {
+          issues.push({ level: 'warn', s: si, r: 'name', msg: `外部キーの親 ${parent} がこのテーブルより後にあります（投入すると失敗します。検証用のファイルなら問題ありません）` });
+        }
+      }
       // 投入用のファイルか検証用のファイルかは見分けられないので、検証用のファイルでも出る
       const missing = table.columns.filter(c => isRequired(c) && !s.columns.some(x => key(x.name) === key(c.name)));
       if (missing.length) {
@@ -1233,7 +1380,7 @@ const SchemaCore = (() => {
     return issues;
   }
 
-  return { tokenize, parseDdl, buildSchema, findTable, findColumn, isRequired, expandColumns, columnLabel, suggest, nearNames, lint };
+  return { tokenize, parseDdl, buildSchema, findTable, findColumn, isRequired, expandColumns, columnLabel, suggest, nearNames, typeInfo, valueProblem, lint };
 })();
 if (typeof module !== 'undefined') module.exports = SchemaCore;
 </script>

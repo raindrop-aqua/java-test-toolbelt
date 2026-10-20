@@ -113,6 +113,8 @@ A001|100|200|CANCELED|Express|-
   - When you type a table name, the registered tables are suggested. When you pick one, you can add all its columns, only the required ones (the primary key and NOT NULL columns without a default), or only the primary key. When you type a column name, the columns you haven't written yet are suggested with their types.
   - Each column name shows its type (such as `VARCHAR(10) NN`) under it. Turn this on or off with "型" (types) in the toolbar.
   - Table and column names not in the schema, and required columns missing from the file, are reported as warnings in the check results. The editor can't tell a file for importing from one for verifying, so the warning about required columns also appears for verification files, where it can be ignored.
+  - Values are checked against the column types with the same rules DbJigu uses to convert them: date formats and dates that don't exist, decimals in integer columns, the digits of `NUMERIC(p,s)`, the length of `VARCHAR(n)`, booleans, empty strings in number columns, and so on. A value the database would round, such as `1.5` in a `NUMERIC(10)` column, is also reported, because verification would then not match.
+  - A table whose foreign-key parent appears only later in the file gets an import-order warning (fine for a verification file).
   - It lists the columns of the table you are editing, with their types, primary key, and NOT NULL. A required column missing from the file gets ⚠, and a table or column name not in the schema shows similar names. Click a column to jump to it in the table.
   - It shows the parent tables of foreign keys, and marks a parent that comes later in the file with "先に投入" (import it first). You can search by table name or column name.
   - Only `CREATE TABLE` is read. `ALTER TABLE` and other statements are ignored (you can see which ones). It is tested with PostgreSQL DDL. Common Oracle syntax (`VARCHAR2`, `NUMBER`, quoted names, and so on) is also handled, but hasn't been tried on real Oracle DDL.
@@ -124,7 +126,7 @@ A001|100|200|CANCELED|Express|-
 - Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.
 - In Chrome and Edge, it saves back to the file you opened. Other browsers download the file instead.
 
-It does not connect to a database. Without registered DDL, it can't check table names or column names. It can't check whether a value matches the column's type either way. Run the test to check those.
+It does not connect to a database. Without registered DDL, it can't check table names or column names. With DDL, it also checks values against the column types, but it judges from the type names in the DDL rather than the database's actual (JDBC) types, so run the test to be sure.
 
 ## Development
 
