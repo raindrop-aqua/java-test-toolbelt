@@ -143,6 +143,10 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     });
   });
 
+  test('値が列の型に合わなければ、セルを警告の色にする', () => {
+    assert.deepEqual(result.steps.valueType, { cell: true, title: '列 created_at（TIMESTAMP）：存在しない日付です' });
+  });
+
   test('テキスト表示では、一覧のクリックでテーブル名の行を選択する', () => {
     assert.equal(result.steps.textJump, '[b]');
   });
@@ -168,8 +172,9 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     });
   });
 
-  test('スキーマと照らし合わせて、スキーマに無い列と、無い必須の列を警告する', () => {
+  test('スキーマと照らし合わせて、投入の順序、スキーマに無い列、無い必須の列を警告する', () => {
     assert.deepEqual(result.steps.schemaIssues, [
+      '警告L1 [orders] 外部キーの親 customer がこのテーブルより後にあります（投入すると失敗します。検証用のファイルなら問題ありません）',
       '警告L2 [orders] 列 memo は orders のスキーマにありません',
       '警告L2 [orders] 必須の列 customer_id がありません（投入すると失敗します。検証用のファイルなら問題ありません）',
       '警告L7 [customer] 必須の列 customer_name がありません（投入すると失敗します。検証用のファイルなら問題ありません）',

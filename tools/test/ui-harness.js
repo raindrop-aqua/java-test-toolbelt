@@ -226,6 +226,14 @@
     q('input.cname[data-s="2"][data-f="3"]').dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
     result.steps.columnChosen = { name: q('input.cname[data-s="2"][data-f="3"]').value, types: types() };
 
+    // 値が列の型に合わなければ、セルを警告の色にする（表示を切り替えてチェックをすぐに行う）
+    type(cell(2, 0, 3), '2024-13-01');
+    text();
+    result.steps.valueType = {
+      cell: q(cell(2, 0, 3)).classList.contains('warn-cell'),
+      title: q(cell(2, 0, 3)).title,
+    };
+
     // 書式の誤りがあると表に切り替えられない
     $('btnText').click();
     $('text').value = '[t]\n1\n';
