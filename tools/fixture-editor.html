@@ -285,6 +285,64 @@ details.help ul { padding-left: 18px; margin: 6px 0; }
 #gridView > .pin-left { left: var(--main-pad); width: calc(var(--view-w) - 2 * var(--main-pad)); max-width: none; }
 .trailing-label { font-size: 12px; color: var(--muted); margin: 4px 0; }
 
+/* スキーマタブ（#29） */
+.schema-files { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; }
+.schema-files #schemaSummary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.schema-files button, .schema-paste button { padding: 0 6px; font-size: 12px; line-height: 20px; }
+details.schema-detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+details.schema-detail summary { cursor: pointer; }
+details.schema-detail ul { list-style: none; margin: 4px 0; padding: 0; }
+details.schema-detail li { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; }
+details.schema-detail .file-name { font-family: var(--mono); color: var(--text); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+details.schema-detail .ign { font-family: var(--mono); overflow-wrap: anywhere; }
+details.schema-detail li button { padding: 0 4px; font-size: 11px; line-height: 16px; }
+.schema-paste { display: none; margin-top: 6px; }
+.schema-paste.open { display: block; }
+.schema-paste textarea { display: block; width: 100%; height: 120px; resize: vertical; font-family: var(--mono); font-size: 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; }
+.schema-paste div { display: flex; gap: 4px; justify-content: flex-end; margin-top: 4px; }
+#schemaSearch { width: 100%; font-size: 13px; padding: 3px 6px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 8px; }
+.schema-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.schema-head .tbl { font-family: var(--mono); font-weight: 700; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.schema-head .src { font-size: 11px; color: var(--muted); }
+.pin { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; font-size: 11px; line-height: 20px; color: var(--muted); }
+.pin svg { width: 12px; height: 12px; }
+.pin[aria-pressed="true"] { color: var(--accent); }
+.schema-note { font-size: 12px; margin: 2px 0 6px; }
+.schema-note.warn { color: var(--warn); }
+.link { border: 0; background: transparent; padding: 0; color: var(--accent); font-family: var(--mono); font-size: inherit; text-decoration: underline; cursor: pointer; }
+.fk { font-size: 12px; color: var(--muted); margin: 0 0 2px; }
+.fk .first { color: var(--warn); }
+.schema-cols { list-style: none; margin: 4px 0 0; padding: 0; font-family: var(--mono); font-size: 12px; }
+.schema-cols li { display: grid; grid-template-columns: 1.4em minmax(0, 1fr) auto; gap: 4px; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+.schema-cols li:hover { background: var(--row-hover); }
+.schema-cols .st { text-align: center; }
+.schema-cols .cn { overflow-wrap: anywhere; }
+.schema-cols .ty { color: var(--muted); white-space: nowrap; }
+.schema-cols li.absent .cn { color: var(--muted); }
+.schema-cols li.missing .st, .schema-cols li.missing .cn { color: var(--warn); }
+.schema-cols li.present .st { color: var(--ok); }
+.schema-cols li.cur { background: var(--accent-soft); }
+.schema-cols li.cur .st { color: var(--accent); }
+.schema-results { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.schema-results li { padding: 2px 0; }
+.schema-results .cols { color: var(--muted); font-family: var(--mono); margin-left: 6px; overflow-wrap: anywhere; }
+.schema-results mark { background: var(--accent-soft); color: inherit; }
+
+/* テーブル名の候補と、列の展開のしかたの選択（自前の候補。<datalist> はブラウザで絞り込み方が違い、型も出せない） */
+.suggest {
+  position: fixed; z-index: 40; min-width: 220px; max-width: 420px; max-height: 280px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 16px rgb(0 0 0 / .18);
+  font-size: 13px; padding: 4px;
+}
+.suggest[hidden] { display: none; }
+.suggest .opt { display: flex; gap: 12px; justify-content: space-between; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-family: var(--mono); }
+.suggest .opt .n { color: var(--muted); font-family: system-ui, sans-serif; font-size: 12px; white-space: nowrap; }
+.suggest .opt.active, .suggest .opt:hover { background: var(--accent-soft); }
+.suggest .expand { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px; max-width: 400px; }
+.suggest .expand .label { width: 100%; color: var(--muted); font-size: 12px; }
+.suggest .expand button { font-size: 12px; }
+.suggest .expand small { color: var(--muted); }
+
 #toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 6px;
@@ -368,12 +426,35 @@ body.dragging #dropHint { display: flex; }
               <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
               <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
               <li>行と列の操作ボタン（移動・追加・複製・コメント化・削除）は、ツールバーの「行・列の操作」で表示・非表示を切り替えられる。</li>
+              <li>「スキーマ」タブで DDL（<code>CREATE TABLE</code> の <code>.sql</code> ファイル、または貼り付け）を登録すると、入力しているテーブルの列の一覧を表示する（✓ ファイルにある、⚠ 必須なのに無い、· 無い、▶ 今の列）。列をクリックすると表のその列へ移動する。登録した DDL はブラウザに保存され、「↻」で読み直す。</li>
+              <li>DDL を登録すると、テーブル名を入力したときにテーブルの候補が出る（<kbd>↑</kbd> <kbd>↓</kbd> と <kbd>Enter</kbd> で選ぶ）。列がまだ無ければ、全列・必須の列だけ・主キーだけを展開できる。</li>
               <li>「テーブル」タブ（右端のアイコン）には、ファイル内のテーブルが順に並ぶ。クリックするとそのテーブルへ移動する。</li>
               <li>このパネルは右端の <code>›</code> ボタン（または表示中のタブのアイコン）で閉じられる。画面の幅が狭いときは表の上に重なり、<kbd>Esc</kbd> か表を触ると閉じる。</li>
               <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
               <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
             </ul>
           </details>
+        </div>
+      </div>
+      <div id="tabSchemaPanel" data-tab="schema" role="tabpanel" aria-labelledby="tabSchema">
+        <div class="card">
+          <h2>スキーマ</h2>
+          <div class="schema-files">
+            <span id="schemaSummary"></span>
+            <button id="btnSchemaReload" title="登録した DDL ファイルを読み直す" aria-label="読み直す">↻</button>
+            <button id="btnSchemaAdd" title="DDL ファイル（.sql）を追加する">＋ ファイル</button>
+            <button id="btnSchemaPaste" title="DDL を貼り付けて登録する">貼り付け</button>
+          </div>
+          <details id="schemaDetail" class="schema-detail"><summary id="schemaCounts"></summary><div id="schemaDetailBody"></div></details>
+          <div id="schemaPasteBox" class="schema-paste">
+            <textarea id="schemaText" spellcheck="false" placeholder="CREATE TABLE ... を貼り付け"></textarea>
+            <div><button id="btnSchemaPasteCancel">やめる</button><button id="btnSchemaPasteOk">登録</button></div>
+          </div>
+          <input type="file" id="schemaInput" accept=".sql,text/plain" multiple hidden>
+        </div>
+        <div class="card">
+          <input type="search" id="schemaSearch" placeholder="列名・テーブル名で検索" spellcheck="false" aria-label="列名・テーブル名で検索">
+          <div id="schemaView"></div>
         </div>
       </div>
       <div id="tabTablesPanel" data-tab="tables" role="tabpanel" aria-labelledby="tabTables">
@@ -391,12 +472,16 @@ body.dragging #dropHint { display: flex; }
       <button id="tabTables" class="rail-btn" role="tab" data-tab="tables" aria-controls="tabTablesPanel" title="テーブル" aria-label="テーブル">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 10v10"/></svg>
       </button>
+      <button id="tabSchema" class="rail-btn" role="tab" data-tab="schema" aria-controls="tabSchemaPanel" title="スキーマ" aria-label="スキーマ">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+      </button>
       <button id="btnSide" class="rail-btn rail-toggle" aria-controls="sidePanel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
       </button>
     </nav>
   </aside>
 </div>
+<div id="suggest" class="suggest" hidden></div>
 <div id="toast"></div>
 <div id="dropHint">ここにドロップして開く</div>
 
@@ -772,14 +857,355 @@ const FixtureCore = (() => {
 if (typeof module !== 'undefined') module.exports = FixtureCore;
 </script>
 
+<script id="schema">
+// DDL（CREATE TABLE）からテーブル定義を読む。DOM に依存しない（#29）。
+// 完全な SQL の解析器ではなく、PostgreSQL と Oracle でよく使う書き方だけを読む
+const SchemaCore = (() => {
+  'use strict';
+
+  // 字句に分ける。コメント（-- と /* */）は読み飛ばし、文字列・引用符付きの名前・$$ で囲んだ本体は 1 つの字句にする
+  function tokenize(text) {
+    const tokens = [];
+    let i = 0;
+    let line = 1;
+    const advance = to => {
+      for (let k = i; k < to; k++) if (text[k] === '\n') line++;
+      i = to;
+    };
+    while (i < text.length) {
+      const c = text[i];
+      if (/\s/.test(c)) { advance(i + 1); continue; }
+      if (c === '-' && text[i + 1] === '-') {
+        const end = text.indexOf('\n', i);
+        advance(end < 0 ? text.length : end);
+        continue;
+      }
+      if (c === '/' && text[i + 1] === '*') {
+        const end = text.indexOf('*/', i + 2);
+        advance(end < 0 ? text.length : end + 2);
+        continue;
+      }
+      const start = i;
+      const startLine = line;
+      let t;
+      let v;
+      if (c === "'") {
+        let k = i + 1;
+        while (k < text.length && !(text[k] === "'" && text[k + 1] !== "'")) k += text[k] === "'" ? 2 : 1;
+        advance(Math.min(k + 1, text.length));
+        t = 'str';
+      } else if (c === '"') {
+        const end = text.indexOf('"', i + 1);
+        advance(end < 0 ? text.length : end + 1);
+        t = 'id';
+        v = text.slice(start + 1, end < 0 ? text.length : end);
+      } else if (c === '$' && /^\$\w*\$/.test(text.slice(i))) {
+        const tag = text.slice(i).match(/^\$\w*\$/)[0];
+        const end = text.indexOf(tag, i + tag.length);
+        advance(end < 0 ? text.length : end + tag.length);
+        t = 'str';
+      } else if (/[\p{L}_]/u.test(c)) {
+        const m = text.slice(i).match(/^[\p{L}\p{N}_$#]+/u)[0];
+        advance(i + m.length);
+        t = 'word';
+        v = m;
+      } else if (/\d/.test(c)) {
+        const m = text.slice(i).match(/^\d+(\.\d+)?/)[0];
+        advance(i + m.length);
+        t = 'num';
+        v = m;
+      } else {
+        advance(i + 1);
+        t = 'sym';
+        v = c;
+      }
+      tokens.push({ t, v, line: startLine, start, end: i });
+    }
+    return tokens;
+  }
+
+  const isWord = (tok, ...words) => tok && tok.t === 'word' && words.includes(tok.v.toUpperCase());
+  const isSym = (tok, s) => tok && tok.t === 'sym' && tok.v === s;
+  // 名前（引用符付きの名前はそのまま、引用符の無い名前は書いたとおり）
+  const nameOf = tok => (tok && (tok.t === 'word' || tok.t === 'id') ? tok.v : null);
+
+  // ; で文に分ける（括弧の中の ; では分けない）。Oracle の SQL*Plus で使う / だけの行も区切りとして扱う
+  function statements(tokens) {
+    const result = [];
+    let cur = [];
+    let depth = 0;
+    tokens.forEach((tok, k) => {
+      if (isSym(tok, '(')) depth++;
+      if (isSym(tok, ')')) depth = Math.max(0, depth - 1);
+      const slashLine = isSym(tok, '/') && depth === 0
+        && (k === 0 || tokens[k - 1].line < tok.line) && (k === tokens.length - 1 || tokens[k + 1].line > tok.line);
+      if ((isSym(tok, ';') && depth === 0) || slashLine) {
+        if (cur.length) result.push(cur);
+        cur = [];
+        depth = 0;
+      } else {
+        cur.push(tok);
+      }
+    });
+    if (cur.length) result.push(cur);
+    return result;
+  }
+
+  // 括弧の中を、深さ 0 の , で分ける。tokens[open] は (
+  function splitParen(tokens, open) {
+    const items = [];
+    let cur = [];
+    let depth = 0;
+    let k = open + 1;
+    for (; k < tokens.length; k++) {
+      const tok = tokens[k];
+      if (isSym(tok, '(')) depth++;
+      if (isSym(tok, ')')) {
+        if (depth === 0) break;
+        depth--;
+      }
+      if (isSym(tok, ',') && depth === 0) {
+        items.push(cur);
+        cur = [];
+      } else {
+        cur.push(tok);
+      }
+    }
+    if (cur.length) items.push(cur);
+    return { items, close: k };
+  }
+
+  // ( a, b ) の名前の並び
+  function nameList(tokens, open) {
+    if (!isSym(tokens[open], '(')) return { names: [], next: open };
+    const { items, close } = splitParen(tokens, open);
+    return { names: items.map(it => nameOf(it[0])).filter(Boolean), next: close + 1 };
+  }
+
+  // スキーマ名.テーブル名 の最後の部分を名前にする
+  function qualifiedName(tokens, k) {
+    let name = nameOf(tokens[k]);
+    if (name == null) return { name: null, next: k };
+    k++;
+    while (isSym(tokens[k], '.') && nameOf(tokens[k + 1]) != null) {
+      name = nameOf(tokens[k + 1]);
+      k += 2;
+    }
+    return { name, next: k };
+  }
+
+  // REFERENCES 親テーブル [(列)]
+  function references(tokens, k) {
+    const { name, next } = qualifiedName(tokens, k);
+    const { names, next: after } = nameList(tokens, next);
+    return { ref: { table: name, columns: names }, next: after };
+  }
+
+  // 列の定義で、型の後に来る制約の始まり
+  const CONSTRAINT_WORDS = ['CONSTRAINT', 'NOT', 'NULL', 'DEFAULT', 'PRIMARY', 'REFERENCES', 'UNIQUE', 'CHECK',
+    'GENERATED', 'COLLATE', 'IDENTITY', 'AUTO_INCREMENT', 'AUTOINCREMENT', 'ENABLE', 'DISABLE', 'INVISIBLE', 'VISIBLE'];
+  const AUTO_TYPES = ['SERIAL', 'SMALLSERIAL', 'BIGSERIAL', 'SERIAL2', 'SERIAL4', 'SERIAL8'];
+
+  // 型を 1 行の文字列にする（VARCHAR(10)、NUMERIC(10,2)、TIMESTAMP WITH TIME ZONE）
+  function typeText(tokens) {
+    let s = '';
+    for (const tok of tokens) {
+      const v = tok.t === 'word' ? tok.v.toUpperCase() : tok.t === 'id' ? `"${tok.v}"` : tok.v;
+      const prev = s[s.length - 1];
+      const glue = s === '' || tok.t === 'sym' || prev === '(' || prev === ',' ? '' : ' ';
+      s += glue + v;
+    }
+    return s;
+  }
+
+  function parseColumn(item) {
+    const name = nameOf(item[0]);
+    const col = { name, type: '', notNull: false, hasDefault: false, pk: false, ref: null };
+    let k = 1;
+    let depth = 0;
+    const typeTokens = [];
+    for (; k < item.length; k++) {
+      const tok = item[k];
+      if (depth === 0 && isWord(tok, ...CONSTRAINT_WORDS)) break;
+      if (isSym(tok, '(')) depth++;
+      if (isSym(tok, ')')) depth--;
+      typeTokens.push(tok);
+    }
+    col.type = typeText(typeTokens);
+    if (isWord(typeTokens[0], ...AUTO_TYPES)) col.hasDefault = true;
+    while (k < item.length) {
+      const tok = item[k];
+      if (isWord(tok, 'NOT') && isWord(item[k + 1], 'NULL')) {
+        col.notNull = true;
+        k += 2;
+      } else if (isWord(tok, 'PRIMARY') && isWord(item[k + 1], 'KEY')) {
+        col.pk = true;
+        k += 2;
+      } else if (isWord(tok, 'DEFAULT')) {
+        // DEFAULT NULL は既定値が無いのと同じ
+        if (isWord(item[k + 1], 'NULL')) {
+          k += 2;
+        } else {
+          col.hasDefault = true;
+          k++;
+        }
+      } else if (isWord(tok, 'GENERATED', 'IDENTITY', 'AUTO_INCREMENT', 'AUTOINCREMENT')) {
+        // 自動で値が入る列（IDENTITY、生成列）は、既定値がある列として扱う
+        col.hasDefault = true;
+        k++;
+      } else if (isWord(tok, 'REFERENCES')) {
+        const r = references(item, k + 1);
+        col.ref = r.ref;
+        k = r.next;
+      } else if (isSym(tok, '(')) {
+        // CHECK (...) や DEFAULT (...) の中は読み飛ばす
+        k = splitParen(item, k).close + 1;
+      } else {
+        k++;
+      }
+    }
+    if (col.pk) col.notNull = true;
+    return col;
+  }
+
+  function parseCreateTable(stmt) {
+    let k = 1;
+    while (isWord(stmt[k], 'OR', 'REPLACE', 'GLOBAL', 'LOCAL', 'TEMPORARY', 'TEMP', 'UNLOGGED', 'PRIVATE')) k++;
+    if (!isWord(stmt[k], 'TABLE')) return null;
+    k++;
+    if (isWord(stmt[k], 'IF') && isWord(stmt[k + 1], 'NOT') && isWord(stmt[k + 2], 'EXISTS')) k += 3;
+    const { name, next } = qualifiedName(stmt, k);
+    // CREATE TABLE ... AS SELECT のように列の定義が無いものは読まない
+    if (name == null || !isSym(stmt[next], '(')) return null;
+    const table = { name, columns: [], fks: [] };
+    for (let item of splitParen(stmt, next).items) {
+      if (!item.length) continue;
+      if (isWord(item[0], 'CONSTRAINT')) item = item.slice(2);
+      if (isWord(item[0], 'PRIMARY') && isWord(item[1], 'KEY')) {
+        const pk = nameList(item, 2).names.map(n => n.toLowerCase());
+        for (const c of table.columns) {
+          if (pk.includes(c.name.toLowerCase())) {
+            c.pk = true;
+            c.notNull = true;
+          }
+        }
+      } else if (isWord(item[0], 'FOREIGN') && isWord(item[1], 'KEY')) {
+        const cols = nameList(item, 2);
+        if (isWord(item[cols.next], 'REFERENCES')) table.fks.push({ columns: cols.names, ref: references(item, cols.next + 1).ref });
+      } else if (isWord(item[0], 'UNIQUE', 'CHECK', 'EXCLUDE', 'INDEX', 'KEY', 'LIKE', 'PERIOD', 'SUPPLEMENTAL')) {
+        // 表に書く UNIQUE・CHECK などは読まない
+      } else if (nameOf(item[0]) != null) {
+        const col = parseColumn(item);
+        table.columns.push(col);
+        if (col.ref) table.fks.push({ columns: [col.name], ref: col.ref });
+      }
+    }
+    for (const c of table.columns) delete c.ref;
+    return table;
+  }
+
+  // DDL のテキストを読む。読めた CREATE TABLE と、無視した文（行番号と先頭の部分）を返す
+  function parseDdl(text) {
+    const tables = [];
+    const ignored = [];
+    for (const stmt of statements(tokenize(text))) {
+      const table = isWord(stmt[0], 'CREATE') ? parseCreateTable(stmt) : null;
+      if (table) {
+        tables.push(table);
+      } else {
+        const src = text.slice(stmt[0].start, stmt[stmt.length - 1].end).replace(/\s+/g, ' ');
+        ignored.push({ line: stmt[0].line, text: src.length > 60 ? src.slice(0, 60) + '…' : src });
+      }
+    }
+    return { tables, ignored };
+  }
+
+  // 登録した DDL ファイル（[{ name, text }]）をまとめる。同じテーブル名は、後から読んだものを使う。
+  // テーブル名は、DbJigu が引用符を付けずに SQL に書くので、大文字と小文字を区別せずに引く
+  function buildSchema(files) {
+    const tables = new Map();
+    const ignored = [];
+    for (const f of files) {
+      const r = parseDdl(f.text);
+      for (const t of r.tables) tables.set(key(t.name), { ...t, file: f.name });
+      for (const i of r.ignored) ignored.push({ file: f.name, ...i });
+    }
+    return { tables, ignored };
+  }
+
+  const key = name => String(name).toLowerCase();
+
+  function findTable(schema, name) {
+    return schema ? schema.tables.get(key(name)) || null : null;
+  }
+
+  function findColumn(table, name) {
+    return table ? table.columns.find(c => key(c.name) === key(name)) || null : null;
+  }
+
+  // 投入するときに値を書く必要がある列（主キーと NOT NULL の列のうち、既定値や自動で入る値の無いもの）
+  const isRequired = col => (col.pk || col.notNull) && !col.hasDefault;
+
+  // 列の展開のしかた（all・required・pk）に合わせた列名
+  function expandColumns(table, how) {
+    const cols = how === 'all' ? table.columns : how === 'required' ? table.columns.filter(c => c.pk || isRequired(c))
+      : how === 'pk' ? table.columns.filter(c => c.pk) : [];
+    return cols.map(c => c.name);
+  }
+
+  // 列の型と制約の短い表示（VARCHAR(10) PK、TIMESTAMP NN）
+  function columnLabel(col) {
+    return [col.type, col.pk ? 'PK' : col.notNull ? 'NN' : ''].filter(Boolean).join(' ');
+  }
+
+  // 入力に合う名前。前方一致を先に、途中の一致を後に、それぞれ名前の順に並べる
+  function suggest(query, names) {
+    const q = key(query.trim());
+    const sorted = [...names].sort((a, b) => key(a).localeCompare(key(b)));
+    if (!q) return sorted;
+    return [...sorted.filter(n => key(n).startsWith(q)), ...sorted.filter(n => !key(n).startsWith(q) && key(n).includes(q))];
+  }
+
+  function distance(a, b) {
+    const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = d[0];
+      d[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = d[j];
+        d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = tmp;
+      }
+    }
+    return d[b.length];
+  }
+
+  // つづりの近い名前（最大 3 つ）。編集距離が名前の長さの 3 分の 1 以下か、一方が他方を含むもの
+  function nearNames(name, names) {
+    const n = key(name);
+    if (!n) return [];
+    return names.map(c => ({ c, d: distance(n, key(c)) }))
+      .filter(({ c, d }) => d <= Math.max(1, Math.floor(n.length / 3)) || key(c).includes(n) || n.includes(key(c)))
+      .sort((a, b) => a.d - b.d || key(a.c).localeCompare(key(b.c)))
+      .slice(0, 3)
+      .map(x => x.c);
+  }
+
+  return { tokenize, parseDdl, buildSchema, findTable, findColumn, isRequired, expandColumns, columnLabel, suggest, nearNames };
+})();
+if (typeof module !== 'undefined') module.exports = SchemaCore;
+</script>
+
 <script>
 (() => {
   'use strict';
   const C = FixtureCore;
+  const S = SchemaCore;
   const $ = id => document.getElementById(id);
   const ALIGN_KEY = 'dbjigu-fixture-editor.align';
   const TOOLS_KEY = 'dbjigu-fixture-editor.tools';
   const SIDE_KEY = 'dbjigu-fixture-editor.side';
+  const SCHEMA_KEY = 'dbjigu-fixture-editor.schema';
   // この幅以下では、サイドパネルを表の上に重なるドロワーにする（CSS の @media と同じ値）
   const narrow = window.matchMedia('(max-width: 900px)');
 
@@ -794,6 +1220,11 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     sideOpen: true,
     sideTab: 'check',
     filter: null,
+    // 表でフォーカスした位置 { s, r, f }、スキーマタブに表示するテーブル名、入力に追従するか（#29）
+    current: null,
+    schemaTable: null,
+    schemaPeek: false,
+    follow: true,
     undo: [],
     redo: [],
     pendingSnap: null,
@@ -928,6 +1359,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   }
 
   function renderGrid() {
+    closeSuggest();
     const doc = state.doc;
     C.serialize(doc, { align: state.align }); // 行番号を求める
     const parts = doc.sections.map((s, si) => sectionHtml(s, si));
@@ -1085,6 +1517,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     renderIssues(issues);
     renderPatterns(doc);
     renderTables(doc, issues);
+    renderSchemaView();
     if (state.mode === 'grid') markCells(issues);
   }
 
@@ -1260,6 +1693,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   grid.addEventListener('focusin', e => {
     if (e.target.matches('input, textarea')) state.pendingSnap = snapshot();
     fitScrollPadding(e.target);
+    trackFocus(e.target);
+    // 「テーブルを追加」した直後など、テーブル名が空なら、入力する前から候補を出す
+    if (e.target.matches('input.tname') && !e.target.value) openTableSuggest(e.target);
   });
 
   grid.addEventListener('input', e => {
@@ -1280,6 +1716,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       doc.trailing = el.value.split('\n');
     } else if (r === 'name') {
       sec.name = el.value;
+      renderSchemaView();
+      // IME の変換中は候補を出さない（確定したときに出す）
+      if (!composing && !e.isComposing) openTableSuggest(el);
     } else if (r === 'h') {
       sec.columns[f - (sec.hasPattern ? 1 : 0)].name = el.value;
       growColumn(el.closest('th'), 'nw', el.value);
@@ -1346,7 +1785,10 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   // Safari では確定の Enter の keydown が compositionend の後に来て isComposing が false になるが、keyCode は 229 になる
   let composing = false;
   grid.addEventListener('compositionstart', () => { composing = true; });
-  grid.addEventListener('compositionend', () => { composing = false; });
+  grid.addEventListener('compositionend', e => {
+    composing = false;
+    if (e.target.matches('input.tname')) openTableSuggest(e.target);
+  });
 
   grid.addEventListener('keydown', e => {
     if (composing || e.isComposing || e.keyCode === 229) return;
@@ -1376,6 +1818,21 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
             sec.rows.splice(r + 1, 0, newRow(sec, sec.rows[r].pattern));
           }, { s, r: r + 1, f });
         }
+      }
+    } else if (el.matches('input.tname') && sug.input === el) {
+      // テーブル名の候補を選ぶ
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveSuggest(e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSuggest();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (sug.active >= 0) chooseTable(el, sug.items[sug.active]);
+        else el.blur();
+      } else if (e.key === 'Tab') {
+        closeSuggest();
       }
     } else if (el.matches('input.tname, input.cname') && e.key === 'Enter') {
       e.preventDefault();
@@ -1708,6 +2165,418 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     renderSide();
   });
 
+  // ---------- スキーマ（#29） ----------
+
+  // 登録した DDL。files は [{ name, text }]（保存する）、handles はファイル名ごとの FileSystemFileHandle（保存しない）
+  const schema = { files: [], data: null, handles: new Map() };
+
+  function setSchemaFiles(files) {
+    schema.files = files;
+    schema.data = files.length ? S.buildSchema(files) : null;
+    // file:// で開いたときは保存できないブラウザもある。保存できなくても、開き直せば使える
+    try { localStorage.setItem(SCHEMA_KEY, JSON.stringify(files)); } catch (e) { /* 無視 */ }
+    renderSchema();
+  }
+
+  // 同じ名前のファイルは置き換え（登録した順は変えない）、新しいファイルは後ろに足す
+  function addSchemaFiles(added) {
+    const files = schema.files.slice();
+    for (const f of added) {
+      const i = files.findIndex(x => x.name === f.name);
+      if (i >= 0) files[i] = { name: f.name, text: f.text };
+      else files.push({ name: f.name, text: f.text });
+      if (f.handle) schema.handles.set(f.name, f.handle);
+    }
+    setSchemaFiles(files);
+    const n = added.reduce((sum, f) => sum + S.parseDdl(f.text).tables.length, 0);
+    toast(`${added.length} 件の DDL を読み込みました（${n} テーブル）`);
+  }
+
+  const SQL_TYPES = [{ description: 'DDL', accept: { 'text/plain': ['.sql', '.ddl', '.txt'] } }];
+
+  async function pickSchemaFiles() {
+    if (window.showOpenFilePicker) {
+      try {
+        const handles = await window.showOpenFilePicker({ types: SQL_TYPES, multiple: true });
+        addSchemaFiles(await Promise.all(handles.map(async h => ({ name: h.name, text: await (await h.getFile()).text(), handle: h }))));
+      } catch (e) {
+        if (e.name !== 'AbortError') toast('開けませんでした: ' + e.message);
+      }
+    } else {
+      $('schemaInput').value = '';
+      $('schemaInput').click();
+    }
+  }
+
+  $('schemaInput').addEventListener('change', async e => {
+    const files = [...e.target.files];
+    if (files.length) addSchemaFiles(await Promise.all(files.map(async f => ({ name: f.name, text: await f.text() }))));
+  });
+
+  // 読み直す。この画面で開いたファイルはそのまま読み直し、ページを開き直した後などで読めないファイルは選び直してもらう
+  async function reloadSchema() {
+    const pasted = f => f.name.startsWith(PASTED);
+    const reread = [];
+    let lost = 0;
+    for (const f of schema.files) {
+      const h = schema.handles.get(f.name);
+      if (h) {
+        try {
+          reread.push({ name: f.name, text: await (await h.getFile()).text(), handle: h });
+          continue;
+        } catch (e) { /* 読めなければ選び直す */ }
+      }
+      if (!pasted(f)) lost++;
+    }
+    if (reread.length) addSchemaFiles(reread);
+    if (!reread.length && !lost) toast('貼り付けた DDL は読み直せません。貼り付け直してください');
+    if (lost) {
+      toast(`${lost} 件のファイルを選び直してください（同じ名前のファイルを置き換えます）`);
+      pickSchemaFiles();
+    }
+  }
+
+  const PASTED = '貼り付け';
+
+  $('btnSchemaAdd').addEventListener('click', pickSchemaFiles);
+  $('btnSchemaReload').addEventListener('click', reloadSchema);
+  $('btnSchemaPaste').addEventListener('click', () => {
+    $('schemaPasteBox').classList.add('open');
+    $('schemaText').focus();
+  });
+  $('btnSchemaPasteCancel').addEventListener('click', () => {
+    $('schemaText').value = '';
+    $('schemaPasteBox').classList.remove('open');
+  });
+  $('btnSchemaPasteOk').addEventListener('click', () => {
+    const text = $('schemaText').value;
+    if (!text.trim()) return;
+    let name = PASTED;
+    for (let n = 2; schema.files.some(f => f.name === name); n++) name = `${PASTED} ${n}`;
+    $('schemaText').value = '';
+    $('schemaPasteBox').classList.remove('open');
+    addSchemaFiles([{ name, text }]);
+  });
+  $('schemaDetailBody').addEventListener('click', e => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    const name = btn.dataset.remove;
+    schema.handles.delete(name);
+    setSchemaFiles(schema.files.filter(f => f.name !== name));
+  });
+
+  function renderSchema() {
+    const files = schema.files;
+    $('btnSchemaReload').disabled = !files.length;
+    $('schemaSummary').textContent = !files.length ? 'DDL は未登録です'
+      : files.length === 1 ? files[0].name : `${files[files.length - 1].name} ほか ${files.length - 1} ファイル`;
+    $('schemaSummary').title = files.map(f => f.name).join('\n');
+    $('schemaDetail').hidden = !files.length;
+    if (files.length) {
+      const d = schema.data;
+      $('schemaCounts').textContent = `${d.tables.size} テーブル・無視した文 ${d.ignored.length} 件`;
+      $('schemaDetailBody').innerHTML = '<ul>' + files.map(f => {
+        const n = S.parseDdl(f.text).tables.length;
+        return `<li><span class="file-name">${esc(f.name)}</span><span>${n} テーブル</span>`
+          + `<button data-remove="${esc(f.name)}" title="登録を解除する" aria-label="${esc(f.name)} の登録を解除する">✕</button></li>`;
+      }).join('') + '</ul>'
+        + (d.ignored.length ? '<div>無視した文（CREATE TABLE 以外）</div><ul>'
+          + d.ignored.map(i => `<li><span class="ign">${esc(i.file)}:${i.line} ${esc(i.text)}</span></li>`).join('') + '</ul>' : '');
+    }
+    renderSchemaView();
+  }
+
+  // 表のどこを入力しているか（スキーマタブの追従と、列の点灯に使う）
+  function currentSection() {
+    const c = state.current;
+    return c && state.doc && state.doc.sections[c.s] ? { si: c.s, sec: state.doc.sections[c.s] } : null;
+  }
+
+  // 表示するテーブルの、ファイル内の区画（入力中の区画を優先する）
+  function sectionFor(name) {
+    const cur = currentSection();
+    if (cur && sameName(cur.sec.name, name)) return cur;
+    const si = state.doc ? state.doc.sections.findIndex(s => sameName(s.name, name)) : -1;
+    return si >= 0 ? { si, sec: state.doc.sections[si] } : null;
+  }
+
+  const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+  const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z"/></svg>';
+
+  function renderSchemaView() {
+    const view = $('schemaView');
+    $('schemaSearch').disabled = !schema.data;
+    if (!schema.data) {
+      view.innerHTML = '<div class="empty">DDL（CREATE TABLE）を登録すると、入力しているテーブルの定義を表示します。</div>';
+      return;
+    }
+    // 追従中は、入力している区画のテーブル（名前を変えたら、変えた後の名前）を表示する。
+    // パネルで選んだテーブル（外部キーの親など）は、次に表のセルにフォーカスするまで表示する
+    const cur = state.follow && !state.schemaPeek ? currentSection() : null;
+    if (cur) state.schemaTable = cur.sec.name;
+    const q = $('schemaSearch').value.trim();
+    view.innerHTML = q ? searchHtml(q) : tableHtml(state.schemaTable);
+    const li = view.querySelector('li.cur');
+    if (li && state.sideOpen && state.sideTab === 'schema') li.scrollIntoView({ block: 'nearest' });
+  }
+
+  // テーブル名でも列名でも絞り込む。テーブル名に合うものを先に、列名だけが合うものを後に並べる
+  function searchHtml(q) {
+    const tables = [...schema.data.tables.values()];
+    const byName = S.suggest(q, tables.map(t => t.name)).map(n => S.findTable(schema.data, n));
+    const lq = q.toLowerCase();
+    const byColumn = tables.filter(t => !byName.includes(t) && t.columns.some(c => c.name.toLowerCase().includes(lq)))
+      .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    const hits = [...byName, ...byColumn];
+    if (!hits.length) return '<div class="empty">見つかりません</div>';
+    const mark = s => {
+      const i = s.toLowerCase().indexOf(lq);
+      return i < 0 ? esc(s) : esc(s.slice(0, i)) + `<mark>${esc(s.slice(i, i + q.length))}</mark>` + esc(s.slice(i + q.length));
+    };
+    const LIMIT = 100;
+    return '<ul class="schema-results">' + hits.slice(0, LIMIT).map(t => {
+      const cols = t.columns.filter(c => c.name.toLowerCase().includes(lq)).map(c => mark(c.name));
+      return `<li><button class="link" data-show="${esc(t.name)}">${mark(t.name)}</button>`
+        + (cols.length ? `<span class="cols">${cols.join(', ')}</span>` : '') + '</li>';
+    }).join('') + '</ul>'
+      + (hits.length > LIMIT ? `<div class="empty">ほか ${hits.length - LIMIT} 件</div>` : '');
+  }
+
+  function tableHtml(name) {
+    const pin = `<button class="pin" data-act="follow" aria-pressed="${state.follow}" title="${state.follow ? '入力しているテーブルに追従しています。押すと止めます' : '押すと、入力しているテーブルに追従します'}">${PIN_SVG}${state.follow ? '追従中' : '追従しない'}</button>`;
+    if (!name) {
+      return `<div class="schema-head"><span class="tbl"></span>${pin}</div>`
+        + '<div class="empty">表のセルにフォーカスすると、そのテーブルの定義を表示します。</div>';
+    }
+    const table = S.findTable(schema.data, name);
+    const names = [...schema.data.tables.values()].map(t => t.name);
+    if (!table) {
+      const near = S.nearNames(name, names);
+      return `<div class="schema-head"><span class="tbl">${esc(name)}</span>${pin}</div>`
+        + `<div class="schema-note warn">スキーマにありません。${near.length ? '近い名前：' + near.map(n => `<button class="link" data-show="${esc(n)}">${esc(n)}</button>`).join('、') : ''}</div>`;
+    }
+    const found = sectionFor(table.name);
+    const inFile = found ? found.sec.columns.map(c => c.name.toLowerCase()) : null;
+    const cur = currentSection();
+    const curCol = found && cur && cur.si === found.si && state.current.f != null
+      ? found.sec.columns[state.current.f - (found.sec.hasPattern ? 1 : 0)] : null;
+    let h = `<div class="schema-head"><span class="tbl">${esc(table.name)}</span><span class="src" title="${esc(table.file)}">${table.columns.length} 列</span>${pin}</div>`;
+    for (const fk of table.fks) {
+      const parent = fk.ref.table;
+      const pi = state.doc ? state.doc.sections.findIndex(s => sameName(s.name, parent)) : -1;
+      // 投入はファイルに書いた順に行うので、親が後ろにあると外部キーの制約に反する
+      const first = found && pi > found.si && !sameName(parent, table.name) ? '<span class="first">（先に投入）</span>' : '';
+      h += `<div class="fk">FK (${esc(fk.columns.join(', '))}) → <button class="link" data-show="${esc(parent)}">${esc(parent)}</button>${first}</div>`;
+    }
+    h += '<ul class="schema-cols">' + table.columns.map(c => {
+      const present = inFile && inFile.includes(c.name.toLowerCase());
+      const st = present ? 'present' : inFile && S.isRequired(c) ? 'missing' : 'absent';
+      const isCur = curCol && sameName(curCol.name, c.name);
+      const sym = isCur ? '▶' : { present: '✓', missing: '⚠', absent: '·' }[st];
+      const tip = { present: 'ファイルにある列', missing: '必須の列（主キー、または NOT NULL で既定値が無い）なのに、ファイルに無い', absent: 'ファイルに無い列' }[st];
+      return `<li class="${st}${isCur ? ' cur' : ''}" data-col="${esc(c.name)}" title="${tip}"><span class="st">${sym}</span>`
+        + `<span class="cn">${esc(c.name)}</span><span class="ty">${esc(S.columnLabel(c))}</span></li>`;
+    }).join('') + '</ul>';
+    // ファイルにあってスキーマに無い列
+    if (found) {
+      const extra = found.sec.columns.filter(c => c.name && !S.findColumn(table, c.name));
+      for (const c of extra) {
+        const near = S.nearNames(c.name, table.columns.map(x => x.name));
+        h += `<div class="schema-note warn">列 ${esc(c.name)} はスキーマにありません。${near.length ? '近い名前：' + near.map(esc).join('、') : ''}</div>`;
+      }
+    }
+    return h;
+  }
+
+  $('schemaSearch').addEventListener('input', renderSchemaView);
+
+  $('schemaView').addEventListener('click', e => {
+    const show = e.target.closest('[data-show]');
+    if (show) {
+      state.schemaTable = show.dataset.show;
+      state.schemaPeek = true;
+      $('schemaSearch').value = '';
+      renderSchemaView();
+      return;
+    }
+    if (e.target.closest('[data-act="follow"]')) {
+      state.follow = !state.follow;
+      state.schemaPeek = false;
+      renderSchemaView();
+      return;
+    }
+    const li = e.target.closest('li[data-col]');
+    if (li) jumpToColumn(state.schemaTable, li.dataset.col);
+  });
+
+  // パネルの列から、表のその列へ移動する（入力中の行があればその行、無ければ最初の値の行）
+  function jumpToColumn(tableName, colName) {
+    const found = sectionFor(tableName);
+    const ci = found ? found.sec.columns.findIndex(c => sameName(c.name, colName)) : -1;
+    if (ci < 0) {
+      toast(`列 ${colName} はファイルにありません`);
+      return;
+    }
+    const { si, sec } = found;
+    const off = sec.hasPattern ? 1 : 0;
+    const c = state.current;
+    const r = c && c.s === si && typeof c.r === 'number' && sec.rows[c.r]?.kind === 'data' ? c.r : sec.rows.findIndex(x => x.kind === 'data');
+    if (narrow.matches) setSide(false);
+    restoreFocus(r >= 0 ? { s: si, r, f: ci + off, select: false } : { s: si, r: 'h', f: ci + off, select: false });
+  }
+
+  // 表でフォーカスした位置を覚え、追従中ならスキーマタブをそのテーブルに合わせる
+  function trackFocus(el) {
+    const { s, r, f } = locate(el);
+    if (s == null) return;
+    state.current = { s, r, f };
+    state.schemaPeek = false;
+    renderSchemaView();
+  }
+
+  // ---------- テーブル名の候補と、列の展開 ----------
+
+  const suggestBox = $('suggest');
+  // input は候補を出している入力欄、anchor は候補や展開のしかたを出す位置の要素
+  const sug = { input: null, anchor: null, items: [], active: -1 };
+
+  function closeSuggest() {
+    suggestBox.hidden = true;
+    suggestBox.innerHTML = '';
+    sug.input = null;
+    sug.anchor = null;
+    sug.items = [];
+    sug.active = -1;
+  }
+
+  function placeSuggest(anchor) {
+    sug.anchor = anchor;
+    const r = anchor.getBoundingClientRect();
+    suggestBox.hidden = false;
+    suggestBox.style.left = Math.max(4, Math.min(r.left, innerWidth - suggestBox.offsetWidth - 4)) + 'px';
+    const below = r.bottom + 2;
+    suggestBox.style.top = (below + suggestBox.offsetHeight > innerHeight && r.top > suggestBox.offsetHeight ? r.top - suggestBox.offsetHeight - 2 : below) + 'px';
+  }
+
+  function openTableSuggest(input) {
+    if (!schema.data) return closeSuggest();
+    const tables = [...schema.data.tables.values()];
+    const names = S.suggest(input.value, tables.map(t => t.name));
+    const sec = state.doc.sections[locate(input).s];
+    // 名前がすでにテーブル名と一致していて、列もあるなら出さない
+    if (!names.length || (names.length === 1 && sameName(names[0], input.value.trim()) && !isEmptySection(sec))) return closeSuggest();
+    sug.input = input;
+    sug.items = names.slice(0, 50);
+    sug.active = input.value.trim() ? 0 : -1;
+    suggestBox.setAttribute('role', 'listbox');
+    suggestBox.innerHTML = sug.items.map((n, i) => `<div class="opt${i === sug.active ? ' active' : ''}" role="option" data-i="${i}">`
+      + `<span>${esc(n)}</span><span class="n">${S.findTable(schema.data, n).columns.length} 列</span></div>`).join('');
+    placeSuggest(input);
+  }
+
+  function moveSuggest(d) {
+    if (!sug.items.length) return;
+    sug.active = (sug.active + d + sug.items.length) % sug.items.length;
+    suggestBox.querySelectorAll('.opt').forEach((o, i) => o.classList.toggle('active', i === sug.active));
+    suggestBox.querySelector('.opt.active').scrollIntoView({ block: 'nearest' });
+  }
+
+  // 列がまだ無い区画（列名がすべて空で、値も入っていない）
+  const isEmptySection = sec => sec.columns.every(c => !c.name) && sec.rows.every(r => r.kind !== 'data' || r.cells.every(v => v === ''));
+
+  function chooseTable(input, name) {
+    const { s } = locate(input);
+    const sec = state.doc.sections[s];
+    const empty = isEmptySection(sec);
+    closeSuggest();
+    mutate(() => { sec.name = name; }, empty ? null : { s, r: 'name', select: false });
+    if (empty) openExpand(s, name);
+  }
+
+  // 列の展開のしかたを選ぶ（全列・必須の列だけ・主キーだけ・展開しない）
+  function openExpand(s, name) {
+    const table = S.findTable(schema.data, name);
+    const anchor = findInput({ s, r: 'name' });
+    if (!table || !anchor) return;
+    const count = how => S.expandColumns(table, how).length;
+    suggestBox.setAttribute('role', 'dialog');
+    suggestBox.innerHTML = `<div class="expand" data-s="${s}" data-table="${esc(table.name)}"><span class="label">列を展開：</span>`
+      + `<button data-how="all">全列 <small>${count('all')}</small></button>`
+      + `<button data-how="required" title="主キーと、NOT NULL で既定値の無い列">必須の列だけ <small>${count('required')}</small></button>`
+      + `<button data-how="pk">主キーだけ <small>${count('pk')}</small></button>`
+      + '<button data-how="none">展開しない</button></div>';
+    placeSuggest(anchor);
+    suggestBox.querySelector('button').focus();
+  }
+
+  function expand(s, tableName, how) {
+    closeSuggest();
+    const sec = state.doc.sections[s];
+    const names = S.expandColumns(S.findTable(schema.data, tableName), how);
+    const off = sec.hasPattern ? 1 : 0;
+    if (!names.length) {
+      restoreFocus({ s, r: 'h', f: off });
+      return;
+    }
+    mutate(() => {
+      sec.columns = names.map(n => ({ name: n, mark: '' }));
+      if (!sec.rows.some(r => r.kind === 'data')) sec.rows.push(newRow(sec, filterLabel()));
+      for (const r of sec.rows) if (r.kind === 'data') r.cells = names.map(() => '');
+    }, { s, r: sec.rows.findIndex(r => r.kind === 'data'), f: off });
+  }
+
+  suggestBox.addEventListener('mousedown', e => {
+    // 入力欄のフォーカスを外さない
+    if (e.target.closest('.opt')) e.preventDefault();
+  });
+  suggestBox.addEventListener('click', e => {
+    const opt = e.target.closest('.opt');
+    if (opt && sug.input) {
+      chooseTable(sug.input, sug.items[Number(opt.dataset.i)]);
+      return;
+    }
+    const btn = e.target.closest('[data-how]');
+    if (btn) {
+      const box = btn.closest('.expand');
+      expand(Number(box.dataset.s), box.dataset.table, btn.dataset.how);
+    }
+  });
+  suggestBox.addEventListener('keydown', e => {
+    const box = e.target.closest('.expand');
+    if (!box) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      expand(Number(box.dataset.s), box.dataset.table, 'none');
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const btns = [...box.querySelectorAll('button')];
+      const i = btns.indexOf(document.activeElement);
+      btns[(i + (e.key === 'ArrowRight' ? 1 : btns.length - 1)) % btns.length].focus();
+    }
+  });
+  // 候補の外にフォーカスが移ったら閉じる
+  document.addEventListener('focusin', e => {
+    if (!suggestBox.hidden && e.target !== sug.input && !suggestBox.contains(e.target)) closeSuggest();
+  });
+  // スクロールしたら入力欄に付いて動き、入力欄が見えなくなったら閉じる
+  function followAnchor() {
+    if (suggestBox.hidden || !sug.anchor) return;
+    const r = sug.anchor.getBoundingClientRect();
+    const m = main.getBoundingClientRect();
+    if (!sug.anchor.isConnected || r.bottom < m.top || r.top > m.bottom || r.right < m.left || r.left > m.right) closeSuggest();
+    else placeSuggest(sug.anchor);
+  }
+  main.addEventListener('scroll', followAnchor);
+  window.addEventListener('resize', followAnchor);
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCHEMA_KEY) || '[]');
+    if (Array.isArray(saved) && saved.length) {
+      schema.files = saved.filter(f => f && typeof f.name === 'string' && typeof f.text === 'string');
+      schema.data = schema.files.length ? S.buildSchema(schema.files) : null;
+    }
+  } catch (e) { /* 保存した内容が読めなければ、未登録として始める */ }
+
   // ---------- ファイル ----------
 
   const FILE_TYPES = [{ description: 'DbJigu フィクスチャ', accept: { 'text/plain': ['.txt'] } }];
@@ -1888,6 +2757,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
 
   state.doc = newDoc();
   renderSide();
+  renderSchema();
   render();
 })();
 </script>

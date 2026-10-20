@@ -1,6 +1,6 @@
 // 画面の配置のテスト（#38）。列や行が多い表をメインの領域でスクロールし、列名の行・行番号・テーブル名が
 // 固定されること、移動先のセルが固定された部分の下に隠れないこと、サイドパネルの開閉、
-// テーブルの一覧からの移動（#39）を確かめる。
+// テーブルの一覧からの移動（#39）、登録した DDL の保存（#29）を確かめる。
 // Chrome DevTools Protocol で画面の大きさを決め、キーを送る。Chrome が無ければスキップする。WebSocket は Node 22 以降で使える
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -180,6 +180,20 @@ test.describe('画面の配置', { skip }, () => {
     const main = await rect('#main');
     const name = await rect('section[data-s="1"] input.tname');
     assert.ok(name.top >= main.top && name.bottom <= main.bottom, `テーブル名 ${JSON.stringify(name)} が見える`);
+  });
+
+  test('登録した DDL は保存され、ページを開き直しても使える（#29）', async () => {
+    await open(1200, 700);
+    await page.evaluate(`(() => {
+      document.getElementById('tabSchema').click();
+      document.getElementById('btnSchemaPaste').click();
+      document.getElementById('schemaText').value = 'CREATE TABLE wide (column_1 INT PRIMARY KEY);';
+      document.getElementById('btnSchemaPasteOk').click();
+    })()`);
+    await page.send('Page.reload');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const counts = await page.evaluate(`document.getElementById('schemaCounts').textContent`);
+    assert.equal(counts, '1 テーブル・無視した文 0 件');
   });
 
   test('テキスト表示では、テキストの欄がメインの領域の高さいっぱいになる', async () => {

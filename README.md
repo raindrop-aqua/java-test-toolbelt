@@ -109,6 +109,12 @@ A001|100|200|CANCELED|Express|-
 - Edit each table as a grid, then save it. The row and column buttons (move, add, duplicate, comment out, delete) can be hidden with "行・列の操作" (row and column tools) in the toolbar.
 - Even in a table with many columns and rows, the scroll bars stay at the edge of the window. The column names, the line numbers, and the table name stay visible while you scroll.
 - The "テーブル" (tables) tab in the side panel lists the tables in file order, with their row counts and numbers of errors and warnings. Click one to jump to it.
+- Register DDL (`.sql` files with `CREATE TABLE`) in the "スキーマ" (schema) tab to use the table definitions without connecting to a database.
+  - When you type a table name, the registered tables are suggested. When you pick one, you can add all its columns, only the required ones (the primary key and NOT NULL columns without a default), or only the primary key.
+  - It lists the columns of the table you are editing, with their types, primary key, and NOT NULL. A required column missing from the file gets ⚠, and a table or column name not in the schema shows similar names. Click a column to jump to it in the table.
+  - It shows the parent tables of foreign keys, and marks a parent that comes later in the file with "先に投入" (import it first). You can search by table name or column name.
+  - Only `CREATE TABLE` is read. `ALTER TABLE` and other statements are ignored (you can see which ones). It is tested with PostgreSQL DDL. Common Oracle syntax (`VARCHAR2`, `NUMBER`, quoted names, and so on) is also handled, but hasn't been tried on real Oracle DDL.
+  - The registered DDL is saved in the browser. Use "↻" to read the files again. If the browser can't save it, register it each time you open the editor.
 - The check results and patterns are shown in a side panel on the right. Close it with the buttons on the right edge to give the tables more room. In a narrow window, it opens over the tables.
 - With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
 - It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or an empty pattern number such as `1,,2`) and shows the line numbers.
@@ -116,7 +122,7 @@ A001|100|200|CANCELED|Express|-
 - Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.
 - In Chrome and Edge, it saves back to the file you opened. Other browsers download the file instead.
 
-It does not connect to a database, so it can't check table names, column names, or whether a value matches the column's type. Run the test to check those.
+It does not connect to a database. Without registered DDL, it can't check table names or column names. It can't check whether a value matches the column's type either way. Run the test to check those.
 
 ## Development
 

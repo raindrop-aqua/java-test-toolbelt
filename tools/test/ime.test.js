@@ -95,4 +95,29 @@ test.describe('IME での入力', { skip }, () => {
     assert.equal(active, 'cname');
     assert.equal(await text(), '[table_name]\n{しめい|col2}\n       |\n');
   });
+
+  test('テーブル名の候補：変換中は出さず、変換を確定する Enter では選ばない（#29）', async () => {
+    await page.evaluate(`(() => {
+      document.getElementById('btnSchemaPaste').click();
+      document.getElementById('schemaText').value = 'CREATE TABLE orders (order_no VARCHAR(10) PRIMARY KEY); CREATE TABLE order_item (line_no INT);';
+      document.getElementById('btnSchemaPasteOk').click();
+      document.querySelector('input.tname').select();
+    })()`);
+    const suggest = () => page.evaluate(`(() => {
+      const box = document.getElementById('suggest');
+      return box.hidden ? null : [...box.querySelectorAll('.opt')].map(o => o.firstChild.textContent);
+    })()`);
+    await page.send('Input.imeSetComposition', { text: 'ord', selectionStart: 3, selectionEnd: 3 });
+    assert.equal(await suggest(), null, '変換中は候補を出さない');
+    const keyEvent = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229, nativeVirtualKeyCode: 229 };
+    await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...keyEvent });
+    await page.send('Input.insertText', { text: 'ord' });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...keyEvent });
+    assert.deepEqual(await suggest(), ['order_item', 'orders'], '確定したら候補を出す');
+    assert.equal(await page.evaluate(`document.querySelector('input.tname').value`), 'ord', '確定の Enter では候補を選ばない');
+    await press('ArrowDown', 40);
+    await press('Enter', 13);
+    assert.equal(await suggest(), null);
+    assert.equal(await text(), '[orders]\n{col1|col2}\n     |\n');
+  });
 });
