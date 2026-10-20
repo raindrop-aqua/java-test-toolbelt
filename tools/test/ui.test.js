@@ -131,6 +131,18 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.equal(result.steps.namedAddRow, '[t]\n{#          |a}\n Gold       |1\n gold,SILVER|2\n            |3\n 02         |4\n Gold       |\n');
   });
 
+  test('列名の下に型を表示し、チェックボックスで切り替える', () => {
+    assert.deepEqual(result.steps.types, { texts: ['VARCHAR(10) PK', 'VARCHAR(10) NN', 'VARCHAR(10) NN'], shown: 'block', hidden: 'none' });
+  });
+
+  test('列名の候補は、まだ書いていない列を型とともに出し、選ぶと型の行も変わる', () => {
+    assert.deepEqual(result.steps.columnSuggest, ['created_atTIMESTAMP NN', 'noteVARCHAR(100)']);
+    assert.deepEqual(result.steps.columnChosen, {
+      name: 'created_at',
+      types: ['VARCHAR(10) PK', 'VARCHAR(10) NN', 'VARCHAR(10) NN', 'TIMESTAMP NN'],
+    });
+  });
+
   test('テキスト表示では、一覧のクリックでテーブル名の行を選択する', () => {
     assert.equal(result.steps.textJump, '[b]');
   });
@@ -154,6 +166,14 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
       ],
       notes: ['列 memo はスキーマにありません。'],
     });
+  });
+
+  test('スキーマと照らし合わせて、スキーマに無い列と、無い必須の列を警告する', () => {
+    assert.deepEqual(result.steps.schemaIssues, [
+      '警告L2 [orders] 列 memo は orders のスキーマにありません',
+      '警告L2 [orders] 必須の列 customer_id がありません（投入すると失敗します。検証用のファイルなら問題ありません）',
+      '警告L7 [customer] 必須の列 customer_name がありません（投入すると失敗します。検証用のファイルなら問題ありません）',
+    ]);
   });
 
   test('スキーマタブ：列のクリックで表のその列へ、外部キーのクリックで親の定義へ移動する', () => {
