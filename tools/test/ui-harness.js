@@ -137,7 +137,7 @@
     fire($('text'), 'input');
     $('btnGrid').click();
     result.steps.fatal = {
-      mode: $('textView').style.display === 'block' ? 'text' : 'grid',
+      mode: $('textView').style.display === 'none' ? 'grid' : 'text',
       issues: $('issues').textContent,
     };
   } catch (e) {

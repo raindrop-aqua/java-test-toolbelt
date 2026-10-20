@@ -75,7 +75,9 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* 画面の高さに合わせ、ページ全体はスクロールしない。表はメインの領域（main）の中で縦横にスクロールする（#38） */
 body {
+  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
@@ -94,7 +96,7 @@ button.icon { padding: 0 6px; line-height: 20px; font-size: 12px; }
 select { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
 
 .bar {
-  position: sticky; top: 0; z-index: 10;
+  position: relative; z-index: 10;
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
   padding: 8px 16px;
   background: var(--panel);
@@ -105,18 +107,36 @@ select { background: var(--panel); border: 1px solid var(--border); border-radiu
 .bar .sep { width: 1px; height: 22px; background: var(--border); }
 .file { font-family: var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 .file.dirty::after { content: " ●"; color: var(--accent); }
-.status { margin-left: auto; font-size: 13px; white-space: nowrap; }
+.status { margin-left: auto; font-size: 13px; white-space: nowrap; border: 0; background: transparent; padding: 0; }
 .status .ok { color: var(--ok); }
 .status .e { color: var(--error); }
 .status .w { color: var(--warn); }
 label.check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; align-items: start; }
-@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+/*
+  メインの領域とサイドパネル。スクロールバーはメインの領域の端に出るので、常に見える。
+  表より広い区画の中でも、テーブル名の行などは見えている幅（--view-w。スクロールバーを除いた main の幅を
+  スクリプトで設定する）に収める。固定（sticky）の位置は main の内容の端から測るので、main には余白を付けず、中の要素に付ける
+*/
+.layout { position: relative; flex: 1; min-height: 0; display: flex; }
+main {
+  --main-pad: 16px;
+  --sec-pad: 12px;
+  /* 区画の中身の左端（余白 + 区画の枠線と余白）と、見えている幅 */
+  --sec-left: calc(var(--main-pad) + var(--sec-pad) + 1px);
+  --view-w: 100%;
+  --sec-inner: calc(var(--view-w) - 2 * var(--main-pad) - 2 * var(--sec-pad) - 2px);
+  flex: 1; min-width: 0; overflow: auto;
+}
+/* どの区画も一番広い表の幅に揃え、狭い表のテーブル名も、右へスクロールしたときに見えるようにする */
+#gridView { width: max-content; min-width: 100%; padding: var(--main-pad); }
 
-.sec { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; padding: 10px 12px; }
+/* 区画は表の幅まで広がる（表ごとにはスクロールしない） */
+.sec { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; padding: 10px var(--sec-pad); }
 .sec.has-error { border-color: var(--error); }
-.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+/* テーブル名の行・コメント・行の追加ボタンは左に固定し、右へスクロールしても見えるようにする */
+.pin-left { position: sticky; left: var(--sec-left); max-width: var(--sec-inner); }
+.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; width: var(--sec-inner); }
 .sec-head .br { font-family: var(--mono); color: var(--muted); }
 .tname { font-family: var(--mono); font-weight: 600; border: 1px solid transparent; background: transparent; padding: 2px 4px; border-radius: 4px; min-width: 8ch; }
 .tname:hover, .tname:focus { border-color: var(--border); background: var(--input-bg); outline: none; }
@@ -128,11 +148,20 @@ textarea.comments {
   background: var(--input-bg); border: 1px dashed var(--border); border-radius: 4px; padding: 3px 6px;
 }
 
-.grid-wrap { overflow-x: auto; }
-/* 表は内容の幅にする（横幅いっぱいに広げると、余った幅が各列に配られて列が広がる） */
-table.grid { border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
-table.grid th, table.grid td { border: 1px solid var(--border); padding: 0; vertical-align: middle; }
+section textarea.comments { width: var(--sec-inner); }
+/*
+  表は内容の幅にする（横幅いっぱいに広げると、余った幅が各列に配られて列が広がる）。
+  固定したセルにも罫線が付くよう、罫線は重ねず（separate）、各セルの右と下に引く
+*/
+table.grid { border-collapse: separate; border-spacing: 0; border: solid var(--border); border-width: 1px 0 0 1px; font-family: var(--mono); font-size: 13px; }
+table.grid th, table.grid td { border: solid var(--border); border-width: 0 1px 1px 0; padding: 0; vertical-align: middle; }
 table.grid th { background: var(--bg); font-weight: normal; text-align: left; }
+/*
+  列名の行は、その表を表示している間だけ上に固定する。行が増えても高さが変わってもずれないよう、
+  セルではなく thead ごと固定する。行番号の列は左に固定する
+*/
+table.grid thead { position: sticky; top: 0; z-index: 2; }
+table.grid .rh { position: sticky; left: 0; z-index: 1; }
 .colhead { display: flex; align-items: center; }
 .colhead input { flex: 1; min-width: 0; font-weight: 600; }
 table.grid .colhead input { min-width: 0; }
@@ -161,24 +190,59 @@ input.ctext { color: var(--comment); }
 body.show-tools .rtools { display: inline-flex; }
 .rtools button { padding: 0 4px; font-size: 11px; line-height: 16px; border-radius: 4px; }
 tr.row:hover td { background: var(--row-hover); }
-tr.dim { opacity: .3; }
+/* 行全体を薄くすると、左に固定した行番号の下の値が透けて見えるので、セルごとに薄くする */
+tr.dim > td:not(.rh), tr.dim > td.rh .ln { opacity: .3; }
 tr.blank td { height: 8px; }
 .add-row { margin-top: 6px; font-size: 12px; }
 
 .err-cell { box-shadow: inset 0 0 0 2px var(--error) !important; background: var(--error-soft) !important; }
 .warn-cell { box-shadow: inset 0 0 0 2px var(--warn) !important; background: var(--warn-soft) !important; }
-tr.err-row > td.rh { background: var(--error-soft); border-left: 3px solid var(--error); }
-tr.warn-row > td.rh { background: var(--warn-soft); border-left: 3px solid var(--warn); }
+tr.err-row > td.rh { background: var(--error-soft); box-shadow: inset 3px 0 var(--error); }
+tr.warn-row > td.rh { background: var(--warn-soft); box-shadow: inset 3px 0 var(--warn); }
 
-#textView { display: none; }
+#textView { display: none; height: 100%; flex-direction: column; padding: var(--main-pad); }
 #text {
-  width: 100%; min-height: 70vh; resize: vertical; tab-size: 4;
+  flex: 1; width: 100%; min-height: 0; resize: none; tab-size: 4;
   font-family: var(--mono); font-size: 13px; line-height: 1.6;
   background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
 }
 .text-tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; color: var(--muted); font-size: 13px; }
 
-aside { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 80px); overflow: auto; }
+/*
+  サイドパネル。右端のタブのハンドル（アイコン）で中身を切り替え、折りたたみボタンで閉じる。
+  幅が広いときはメインの領域の横に並び、狭いときは表の上に重なるドロワーになる
+*/
+.side { display: flex; }
+.side-panel {
+  display: none; flex-direction: column; gap: 12px; width: 332px; overflow: auto; padding: 16px 12px;
+}
+.side-panel > [data-tab] { display: none; flex-direction: column; gap: 12px; }
+.side-panel > [data-tab].active { display: flex; }
+.layout.side-open .side-panel { display: flex; }
+.side-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 40px; padding: 8px 0;
+  background: var(--panel); border-left: 1px solid var(--border);
+}
+.rail-btn { position: relative; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-color: transparent; background: transparent; color: var(--muted); }
+.rail-btn svg { width: 18px; height: 18px; }
+.rail-btn[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
+.layout:not(.side-open) .rail-btn[aria-selected="true"] { background: transparent; }
+.rail-toggle { margin-top: auto; }
+.layout.side-open .rail-toggle svg { transform: scaleX(-1); }
+.badge {
+  position: absolute; top: -3px; right: -4px; min-width: 16px; padding: 0 3px; border-radius: 8px;
+  font-size: 10px; line-height: 16px; font-weight: 700; color: var(--bg); background: var(--error);
+}
+.badge.warn { background: var(--warn); }
+.badge:empty { display: none; }
+@media (max-width: 900px) {
+  .side-panel {
+    position: absolute; top: 0; right: 40px; bottom: 0; z-index: 5; width: min(320px, calc(100% - 80px));
+    padding: 12px; background: var(--bg); border-left: 1px solid var(--border);
+    box-shadow: -6px 0 16px rgb(0 0 0 / .18);
+  }
+}
+#patterns { overflow-x: auto; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .card h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
 .issues { list-style: none; margin: 0; padding: 0; font-size: 13px; }
@@ -200,7 +264,8 @@ details.help { font-size: 13px; }
 details.help summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 details.help code, details.help kbd { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 0 3px; }
 details.help ul { padding-left: 18px; margin: 6px 0; }
-.add-sec { width: 100%; padding: 8px; border-style: dashed; color: var(--muted); }
+.add-sec { padding: 8px; border-style: dashed; color: var(--muted); }
+#gridView > .pin-left { left: var(--main-pad); width: calc(var(--view-w) - 2 * var(--main-pad)); max-width: none; }
 .trailing-label { font-size: 12px; color: var(--muted); margin: 4px 0; }
 
 #toast {
@@ -245,12 +310,12 @@ body.dragging #dropHint { display: flex; }
   <label class="check">パターン
     <select id="selFilter"></select>
   </label>
-  <span id="status" class="status"></span>
+  <button id="status" class="status" title="チェック結果を表示"></button>
   <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
 </header>
 
-<div class="layout">
-  <main>
+<div class="layout" id="layout">
+  <main id="main">
     <div id="gridView"></div>
     <div id="textView">
       <div class="text-tools">
@@ -260,35 +325,49 @@ body.dragging #dropHint { display: flex; }
       <textarea id="text" spellcheck="false" wrap="off"></textarea>
     </div>
   </main>
-  <aside>
-    <div class="card">
-      <h2>チェック結果</h2>
-      <ul id="issues" class="issues"></ul>
+  <aside class="side">
+    <div id="sidePanel" class="side-panel">
+      <div id="tabCheckPanel" data-tab="check" role="tabpanel" aria-labelledby="tabCheck">
+        <div class="card">
+          <h2>チェック結果</h2>
+          <ul id="issues" class="issues"></ul>
+        </div>
+        <div class="card">
+          <h2>パターン</h2>
+          <div id="patterns"></div>
+        </div>
+        <div class="card">
+          <details class="help">
+            <summary>書式と操作</summary>
+            <ul>
+              <li><code>[テーブル]</code> の次の行に <code>{列1|列2}</code>、その後に値の行。</li>
+              <li><code>&lt;null&gt;</code> は NULL。何も書かなければ空文字。</li>
+              <li>列名の記号（検証のとき）：<code>@</code> 比較しない、<code>&lt; &lt;= &gt; &gt;=</code> 大小、<code>!=</code> 等しくない、<code>%</code> 前方一致。投入では無視される。</li>
+              <li>「パターン列」を有効にすると、各行の先頭がパターン番号（<code>1,2</code> や <code>gold,silver</code>）になる。空なら全パターン共通。名前の大文字と小文字は区別せず、<code>01</code>・<code>+1</code>・全角の <code>１</code> は <code>1</code> と同じパターン。</li>
+              <li><code>//</code> で始まる行はコメント。</li>
+            </ul>
+            <ul>
+              <li><kbd>Enter</kbd> / <kbd>↓</kbd> 下の行へ（最後の行では行を追加）、<kbd>Shift+Enter</kbd> / <kbd>↑</kbd> 上の行へ</li>
+              <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
+              <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
+              <li>行と列の操作ボタン（移動・追加・複製・コメント化・削除）は、ツールバーの「行・列の操作」で表示・非表示を切り替えられる。</li>
+              <li>このパネルは右端の <code>›</code> ボタン（または表示中のタブのアイコン）で閉じられる。画面の幅が狭いときは表の上に重なり、<kbd>Esc</kbd> か表を触ると閉じる。</li>
+              <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
+              <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
+            </ul>
+          </details>
+        </div>
+      </div>
     </div>
-    <div class="card">
-      <h2>パターン</h2>
-      <div id="patterns"></div>
-    </div>
-    <div class="card">
-      <details class="help">
-        <summary>書式と操作</summary>
-        <ul>
-          <li><code>[テーブル]</code> の次の行に <code>{列1|列2}</code>、その後に値の行。</li>
-          <li><code>&lt;null&gt;</code> は NULL。何も書かなければ空文字。</li>
-          <li>列名の記号（検証のとき）：<code>@</code> 比較しない、<code>&lt; &lt;= &gt; &gt;=</code> 大小、<code>!=</code> 等しくない、<code>%</code> 前方一致。投入では無視される。</li>
-          <li>「パターン列」を有効にすると、各行の先頭がパターン番号（<code>1,2</code> や <code>gold,silver</code>）になる。空なら全パターン共通。名前の大文字と小文字は区別せず、<code>01</code>・<code>+1</code>・全角の <code>１</code> は <code>1</code> と同じパターン。</li>
-          <li><code>//</code> で始まる行はコメント。</li>
-        </ul>
-        <ul>
-          <li><kbd>Enter</kbd> / <kbd>↓</kbd> 下の行へ（最後の行では行を追加）、<kbd>Shift+Enter</kbd> / <kbd>↑</kbd> 上の行へ</li>
-          <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
-          <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
-          <li>行と列の操作ボタン（移動・追加・複製・コメント化・削除）は、ツールバーの「行・列の操作」で表示・非表示を切り替えられる。</li>
-          <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
-          <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
-        </ul>
-      </details>
-    </div>
+    <nav class="side-rail" role="tablist" aria-orientation="vertical" aria-label="サイドパネル">
+      <button id="tabCheck" class="rail-btn" role="tab" data-tab="check" aria-controls="tabCheckPanel" title="チェック" aria-label="チェック">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6v3H9z"/><path d="M9 5H6v16h12V5h-3"/><path d="m9 14 2 2 4-4"/></svg>
+        <span id="checkBadge" class="badge"></span>
+      </button>
+      <button id="btnSide" class="rail-btn rail-toggle" aria-controls="sidePanel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+      </button>
+    </nav>
   </aside>
 </div>
 <div id="toast"></div>
@@ -673,6 +752,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   const $ = id => document.getElementById(id);
   const ALIGN_KEY = 'dbjigu-fixture-editor.align';
   const TOOLS_KEY = 'dbjigu-fixture-editor.tools';
+  const SIDE_KEY = 'dbjigu-fixture-editor.side';
+  // この幅以下では、サイドパネルを表の上に重なるドロワーにする（CSS の @media と同じ値）
+  const narrow = window.matchMedia('(max-width: 900px)');
 
   const state = {
     doc: null,
@@ -682,6 +764,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     mode: 'grid',
     align: true,
     showTools: true,
+    sideOpen: true,
+    sideTab: 'check',
     filter: null,
     undo: [],
     redo: [],
@@ -694,7 +778,11 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     if (saved != null) state.align = saved === '1';
     const tools = localStorage.getItem(TOOLS_KEY);
     if (tools != null) state.showTools = tools === '1';
+    const side = localStorage.getItem(SIDE_KEY);
+    if (side != null) state.sideOpen = side === '1';
   } catch (e) { /* 保存できない環境では既定値を使う */ }
+  // ドロワーは表を隠すので、最初は閉じておく
+  if (narrow.matches) state.sideOpen = false;
 
   // ---------- モデルの操作 ----------
 
@@ -769,7 +857,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
 
   function render(focus) {
     $('gridView').style.display = state.mode === 'grid' ? '' : 'none';
-    $('textView').style.display = state.mode === 'text' ? 'block' : 'none';
+    $('textView').style.display = state.mode === 'text' ? 'flex' : 'none';
     $('btnGrid').setAttribute('aria-pressed', state.mode === 'grid');
     $('btnText').setAttribute('aria-pressed', state.mode === 'text');
     $('chkAlign').checked = state.align;
@@ -817,10 +905,10 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     C.serialize(doc, { align: state.align }); // 行番号を求める
     const parts = doc.sections.map((s, si) => sectionHtml(s, si));
     if (doc.trailing.length) {
-      parts.push(`<div class="trailing-label">ファイル末尾のコメント</div>
-        <textarea class="comments" data-kind="trailing" rows="${doc.trailing.length}" spellcheck="false">${esc(doc.trailing.join('\n'))}</textarea>`);
+      parts.push(`<div class="trailing-label pin-left">ファイル末尾のコメント</div>
+        <textarea class="comments pin-left" data-kind="trailing" rows="${doc.trailing.length}" spellcheck="false">${esc(doc.trailing.join('\n'))}</textarea>`);
     }
-    parts.push('<button class="add-sec" data-act="sec-add">＋ テーブルを追加</button>');
+    parts.push('<button class="add-sec pin-left" data-act="sec-add">＋ テーブルを追加</button>');
     $('gridView').innerHTML = parts.join('');
   }
 
@@ -831,9 +919,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     const span = maxCells + off;
     let h = `<section class="sec" data-s="${si}">`;
     if (s.comments.length) {
-      h += `<textarea class="comments" data-s="${si}" data-kind="comments" rows="${s.comments.length}" spellcheck="false">${esc(s.comments.join('\n'))}</textarea>`;
+      h += `<textarea class="comments pin-left" data-s="${si}" data-kind="comments" rows="${s.comments.length}" spellcheck="false">${esc(s.comments.join('\n'))}</textarea>`;
     }
-    h += `<div class="sec-head">
+    h += `<div class="sec-head pin-left">
       <span class="ln">L${s.line}</span>
       <span class="br">[</span><input class="tname" data-s="${si}" data-r="name" value="${esc(s.name)}" size="${Math.max(8, C.displayWidth(s.name) + 1)}" placeholder="テーブル名" spellcheck="false"><span class="br">]</span>
       <div class="sec-tools">
@@ -849,9 +937,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       </div>
     </div>`;
     for (const c of s.headerComments) {
-      h += `<div class="ln" style="color:var(--comment)">${esc(c)}</div>`;
+      h += `<div class="ln pin-left" style="color:var(--comment)">${esc(c)}</div>`;
     }
-    h += `<div class="grid-wrap"><table class="grid"><thead><tr><th class="rh"><span class="ln">L${s.headerLine}</span></th>`;
+    h += `<table class="grid"><thead><tr><th class="rh"><span class="ln">L${s.headerLine}</span></th>`;
     if (s.hasPattern) h += '<th class="pat" title="パターン番号">#</th>';
     s.columns.forEach((c, ci) => {
       const f = ci + off;
@@ -897,8 +985,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
         h += '</tr>';
       }
     });
-    h += `</tbody></table></div>
-      <button class="add-row" data-act="sec-addrow">＋ 行を追加</button></section>`;
+    h += `</tbody></table>
+      <div class="pin-left"><button class="add-row" data-act="sec-addrow">＋ 行を追加</button></div></section>`;
     return h;
   }
 
@@ -918,9 +1006,18 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     return g.querySelector(`input.cell[data-s="${focus.s}"][data-r="${focus.r}"][data-f="${focus.f}"]`);
   }
 
+  // セルにフォーカスしてスクロールするとき、上に固定した列名の行と、左に固定した行番号の下に隠れないようにする。
+  // 列名の行の高さは表ごとに違う（行・列の操作ボタンの表示など）ので、フォーカスする要素の表に合わせる
+  function fitScrollPadding(el) {
+    const table = el.closest('table.grid');
+    main.style.scrollPaddingTop = table && !el.closest('thead') ? table.tHead.offsetHeight + 'px' : '';
+    main.style.scrollPaddingLeft = table ? table.querySelector('.rh').offsetWidth + 'px' : '';
+  }
+
   function restoreFocus(focus) {
     const el = findInput(focus);
     if (el) {
+      fitScrollPadding(el);
       el.focus();
       if (el.select && focus.select !== false) el.select();
       el.scrollIntoView({ block: 'nearest' });
@@ -968,6 +1065,9 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   function renderIssues(issues) {
     const errors = issues.filter(i => i.level === 'error').length;
     const warns = issues.filter(i => i.level === 'warn').length;
+    const badge = $('checkBadge');
+    badge.textContent = errors || warns || '';
+    badge.classList.toggle('warn', !errors);
     $('status').innerHTML = errors || warns
       ? `<span class="e">エラー ${errors}</span> / <span class="w">警告 ${warns}</span>`
       : '<span class="ok">✓ 問題なし</span>';
@@ -1070,8 +1170,10 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     return { s, r, f };
   }
 
+  // フォーカスによるスクロール（Tab キーなど）は focusin の後に起こるので、ここで余白を合わせておく
   grid.addEventListener('focusin', e => {
     if (e.target.matches('input, textarea')) state.pendingSnap = snapshot();
+    fitScrollPadding(e.target);
   });
 
   grid.addEventListener('input', e => {
@@ -1378,6 +1480,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       }, { s: issue.s, r: issue.r, f: off });
       return;
     }
+    // ドロワーは移動先のセルを隠すので閉じる
+    if (narrow.matches) setSide(false);
     if (issue.r === 'h' && issue.f == null) restoreFocus({ s: issue.s, r: 'name' });
     else if (typeof issue.r === 'number' && sec.rows[issue.r].kind === 'comment') restoreFocus({ s: issue.s, r: issue.r });
     else restoreFocus({ s: issue.s, r: issue.r, f: issue.f ?? off });
@@ -1462,6 +1566,60 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   $('selFilter').addEventListener('change', e => {
     state.filter = e.target.value === '' ? null : e.target.value;
     render();
+  });
+
+  // ---------- メインの領域 ----------
+
+  // 見えている幅（スクロールバーを除く）。表より広い区画の中で、テーブル名の行などをこの幅に収める
+  const main = $('main');
+  new ResizeObserver(() => main.style.setProperty('--view-w', main.clientWidth + 'px')).observe(main);
+
+  // ---------- サイドパネル ----------
+
+  function renderSide() {
+    const open = state.sideOpen;
+    $('layout').classList.toggle('side-open', open);
+    document.querySelectorAll('.side-rail [role="tab"]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === state.sideTab));
+    document.querySelectorAll('.side-panel > [data-tab]').forEach(p => p.classList.toggle('active', p.dataset.tab === state.sideTab));
+    const btn = $('btnSide');
+    btn.title = open ? 'サイドパネルを閉じる' : 'サイドパネルを開く';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-expanded', open);
+  }
+
+  function setSide(open, tab) {
+    state.sideOpen = open;
+    if (tab) state.sideTab = tab;
+    // ドロワーで開いたことは覚えない（幅が広い画面での開閉だけを覚える）
+    if (!narrow.matches) {
+      try { localStorage.setItem(SIDE_KEY, open ? '1' : '0'); } catch (err) { /* 無視 */ }
+    }
+    renderSide();
+  }
+
+  // 表示中のタブのハンドルを押すと閉じる
+  document.querySelector('.side-rail').addEventListener('click', e => {
+    const tab = e.target.closest('[role="tab"]');
+    if (!tab) return;
+    setSide(!(state.sideOpen && state.sideTab === tab.dataset.tab), tab.dataset.tab);
+  });
+  $('btnSide').addEventListener('click', () => setSide(!state.sideOpen));
+  $('status').addEventListener('click', () => setSide(true, 'check'));
+
+  // ドロワーは、表を触るか Esc で閉じる
+  main.addEventListener('pointerdown', () => {
+    if (narrow.matches && state.sideOpen) setSide(false);
+  });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && narrow.matches && state.sideOpen) setSide(false);
+  });
+  narrow.addEventListener('change', () => {
+    if (narrow.matches) {
+      state.sideOpen = false;
+    } else {
+      try { state.sideOpen = localStorage.getItem(SIDE_KEY) !== '0'; } catch (err) { state.sideOpen = true; }
+    }
+    renderSide();
   });
 
   // ---------- ファイル ----------
@@ -1643,6 +1801,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   }
 
   state.doc = newDoc();
+  renderSide();
   render();
 })();
 </script>
