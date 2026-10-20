@@ -135,6 +135,45 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.equal(result.steps.textJump, '[b]');
   });
 
+  test('DDL を貼り付けて登録する（#29）', () => {
+    assert.deepEqual(result.steps.schemaLoaded, { summary: '貼り付け', counts: '2 テーブル・無視した文 1 件' });
+  });
+
+  test('スキーマタブ：入力中のテーブルの列を、ファイルにあるか・必須か・今の列かとともに表示する', () => {
+    assert.deepEqual(result.steps.schemaView, {
+      head: 'orders',
+      // 親の customer がファイルで後ろにある
+      fk: ['FK (customer_id) → customer（先に投入）'],
+      cols: [
+        '✓ order_no VARCHAR(10) PK',
+        '⚠ customer_id VARCHAR(10) NN',
+        '▶ status VARCHAR(10) NN',
+        '· note VARCHAR(100)',
+        // 既定値があるので必須ではない
+        '· created_at TIMESTAMP NN',
+      ],
+      notes: ['列 memo はスキーマにありません。'],
+    });
+  });
+
+  test('スキーマタブ：列のクリックで表のその列へ、外部キーのクリックで親の定義へ移動する', () => {
+    assert.deepEqual(result.steps.schemaJump, { s: '0', r: '1', f: '0' });
+    assert.equal(result.steps.schemaParent, 'customer');
+  });
+
+  test('スキーマタブ：列名でも検索でき、追従を止められ、無いテーブル名には近い名前を示す', () => {
+    assert.deepEqual(result.steps.schemaSearch, ['customercustomer_id', 'orderscustomer_id']);
+    assert.equal(result.steps.schemaPinned, 'orders', '追従を止めると表示は変わらない');
+    assert.equal(result.steps.schemaFollow, 'customer', '追従を再開すると入力中のテーブルを表示する');
+    assert.equal(result.steps.schemaUnknown, 'スキーマにありません。近い名前：customer');
+  });
+
+  test('テーブル名の候補を選び、必須の列だけを展開する', () => {
+    assert.deepEqual(result.steps.suggest, ['orders5 列']);
+    assert.deepEqual(result.steps.expandChoices, ['全列 5', '必須の列だけ 3', '主キーだけ 1', '展開しない']);
+    assert.match(result.steps.expanded, /\n\n\[orders\]\n\{order_no\|customer_id\|status\}\n {9}\| {11}\|\n$/);
+  });
+
   test('書式の誤りがあると、テキストのまま誤りを表示する', () => {
     assert.equal(result.steps.fatal.mode, 'text');
     assert.match(result.steps.fatal.issues, /データの前に \{列名1\|列名2\} を記述してください/);

@@ -146,6 +146,68 @@
     result.steps.textJump = ta.value.slice(ta.selectionStart, ta.selectionEnd);
     $('btnGrid').click();
 
+    // DDL を貼り付けて登録し、スキーマタブで入力中のテーブルの定義を見る（#29）
+    $('btnSchemaPaste').click();
+    $('schemaText').value = [
+      'CREATE TABLE customer (customer_id VARCHAR(10) PRIMARY KEY, customer_name VARCHAR(50) NOT NULL);',
+      'CREATE TABLE orders (',
+      '  order_no VARCHAR(10) PRIMARY KEY,',
+      '  customer_id VARCHAR(10) NOT NULL REFERENCES customer (customer_id),',
+      '  status VARCHAR(10) NOT NULL,',
+      '  note VARCHAR(100),',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL',
+      ');',
+      'CREATE INDEX ix_orders ON orders (status);',
+    ].join('\n');
+    $('btnSchemaPasteOk').click();
+    result.steps.schemaLoaded = { summary: $('schemaSummary').textContent, counts: $('schemaCounts').textContent };
+    $('btnText').click();
+    $('text').value = '[orders]\n{order_no|status|memo}\nA1|NEW|x\nA2|NEW|y\n\n[customer]\n{customer_id}\nC1\n';
+    fire($('text'), 'input');
+    $('btnGrid').click();
+    const focusCell = sel => q(sel).dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    const schemaView = () => ({
+      head: q('#schemaView .tbl').textContent,
+      fk: [...document.querySelectorAll('#schemaView .fk')].map(e => e.textContent),
+      cols: [...document.querySelectorAll('#schemaView .schema-cols li')].map(li => `${li.querySelector('.st').textContent} ${li.dataset.col} ${li.querySelector('.ty').textContent}`),
+      notes: [...document.querySelectorAll('#schemaView .schema-note')].map(e => e.textContent),
+    });
+    focusCell(cell(0, 1, 1));
+    result.steps.schemaView = schemaView();
+    // パネルの列をクリックすると、表のその列（入力中の行）へ移動する
+    q('#schemaView li[data-col="order_no"]').click();
+    result.steps.schemaJump = { s: document.activeElement.dataset.s, r: document.activeElement.dataset.r, f: document.activeElement.dataset.f };
+    // 外部キーの親をクリックすると、その定義を表示する
+    q('#schemaView [data-show="customer"]').click();
+    result.steps.schemaParent = q('#schemaView .tbl').textContent;
+    // 列名でも検索できる
+    $('schemaSearch').value = 'customer_id';
+    fire($('schemaSearch'), 'input');
+    result.steps.schemaSearch = [...document.querySelectorAll('#schemaView .schema-results li')].map(li => li.textContent);
+    $('schemaSearch').value = '';
+    fire($('schemaSearch'), 'input');
+    // 追従を止めると、別のテーブルにフォーカスしても表示は変わらない
+    focusCell(cell(0, 0, 0));
+    q('#schemaView [data-act="follow"]').click();
+    focusCell(cell(1, 0, 0));
+    result.steps.schemaPinned = q('#schemaView .tbl').textContent;
+    q('#schemaView [data-act="follow"]').click();
+    result.steps.schemaFollow = q('#schemaView .tbl').textContent;
+    // スキーマに無いテーブル名は、近い名前を示す
+    type('input.tname[data-s="1"]', 'custmer');
+    result.steps.schemaUnknown = q('#schemaView .schema-note').textContent;
+    type('input.tname[data-s="1"]', 'customer');
+
+    // テーブルを追加して名前を入力すると候補が出て、選ぶと列の展開のしかたを選べる
+    q('[data-act="sec-add"]').click();
+    type('input.tname[data-s="2"]', 'ord');
+    const tname = q('input.tname[data-s="2"]');
+    result.steps.suggest = [...document.querySelectorAll('#suggest .opt')].map(o => o.textContent);
+    tname.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+    result.steps.expandChoices = [...document.querySelectorAll('#suggest [data-how]')].map(b => b.textContent);
+    q('#suggest [data-how="required"]').click();
+    result.steps.expanded = text();
+
     // 書式の誤りがあると表に切り替えられない
     $('btnText').click();
     $('text').value = '[t]\n1\n';
