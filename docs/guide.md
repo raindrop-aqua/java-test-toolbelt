@@ -751,6 +751,7 @@ Open [tools/fixture-editor.html](../tools/fixture-editor.html) in a browser to e
 - When you save with "桁揃え" (align) on, the `|` characters are lined up. Fields are trimmed, so the meaning doesn't change. The verification output also shows rows without the padding ([5.3](#53-output-on-failure)).
 - When you choose a pattern number, only the rows imported or verified for that pattern (its own rows and the common rows) are shown at full strength.
 - You can copy a range from Excel and paste it into a cell.
+- In a table with many columns and rows, the column names and line numbers stay in place, so you can tell which column and row you are looking at.
 
 ### Empty strings and NULL
 
