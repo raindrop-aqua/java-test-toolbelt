@@ -774,6 +774,13 @@ DbJigu does not delete the data it inserts. The rollback of the test transaction
 
 In these cases, delete the data yourself after the test.
 
+### Using H2 (in-memory)
+
+DbJigu also works with an H2 2.x in-memory database (default mode and `MODE=PostgreSQL`). The examples in this guide are run on H2 too. Keep these points in mind:
+
+- H2 does not include DDL in the transaction. A `CREATE TABLE` in a test is not removed by the rollback (the imported data is). An in-memory database disappears when its last connection is closed, so if each test closes its connection as in [2.1](#21-basic-example-junit--jdbc), every test starts empty. With a connection pool, as in Spring, the database lives on, so create the tables once at startup (for example with `schema.sql`).
+- H2 and your production database differ in some behavior, such as rounding, string comparison, and types. A test that passes on H2 can fail on the production database, so run the tests on the same database as production too.
+
 ---
 
 ## 7. Limitations and troubleshooting

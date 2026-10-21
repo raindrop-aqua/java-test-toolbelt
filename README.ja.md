@@ -102,6 +102,22 @@ A001|100|200|CANCELED|特急|-
 - 文字列の大小は DB の照合順序で決まるため、`<` や `>` などは主に数値と日時に使ってください。
 - LOB 列には `<` `<=` `>` `>=` を付けられません。
 
+## 対応する DB
+
+DbJigu は DB に依存する SQL を使いません。テストは次の DB で実行しています。
+
+| DB | 状況 |
+|---|---|
+| PostgreSQL 17 | 自動テストで確認（GitHub Actions）。主な対象です。 |
+| H2 2.x のインメモリ（既定のモードと `MODE=PostgreSQL`） | 自動テストで確認（GitHub Actions）。 |
+| Oracle | 利用実績はありますが、自動テストはしていません。 |
+
+H2 の注意点です。
+
+- H2 は DDL をトランザクションに含めません。`CREATE TABLE` はその時点でコミットされ、ロールバックされません。DbJigu で投入したデータは、通常どおりロールバックされます。インメモリの DB は最後の接続を閉じると消えるので、ガイドの例のようにテストごとに接続を開いて閉じれば、毎回空の状態から始まります。コネクションプール（Spring など）や `DB_CLOSE_DELAY=-1` では DB が残るので、テーブルはテストごとではなく一度だけ（`schema.sql` などで）作ってください。
+- H2 と PostgreSQL では、丸め、文字列の比較、型（`TEXT` は `VARCHAR`、H2 には `CLOB` がある）など、DB の振る舞いが違うところがあります。H2 で通ったテストが PostgreSQL で失敗することがあります。この違いは DbJigu では吸収しません。
+- `MODE=Oracle` など、ほかの H2 のモードは確かめていません。
+
 ## フィクスチャエディタ
 
 [`tools/fixture-editor.html`](tools/fixture-editor.html) は、フィクスチャを表の形で編集するツールです。ファイルをダウンロードしてブラウザで開くだけで使えます。インストールは不要で、外部への通信も行いません。
@@ -153,7 +169,14 @@ DB には接続しません。DDL を登録していなければ、テーブル�
 node --test tools/test/*.test.js
 ```
 
-GitHub Actions でも、プルリクエストと `main` へのプッシュのたびに同じテストを実行します（[.github/workflows/build.yml](.github/workflows/build.yml)）。
+H2（インメモリ）で実行するなら、DB を用意する必要はありません。Spring の例はテストのトランザクション内でテーブルを作るため、H2 ではスキップします。
+
+```bash
+./gradlew build -Pdbjigu.url=jdbc:h2:mem:test
+./gradlew build '-Pdbjigu.url=jdbc:h2:mem:test;MODE=PostgreSQL'
+```
+
+GitHub Actions でも、プルリクエストと `main` へのプッシュのたびに、PostgreSQL と H2 で同じテストを実行します（[.github/workflows/build.yml](.github/workflows/build.yml)）。
 
 ## ライセンス
 
