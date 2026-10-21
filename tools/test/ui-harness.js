@@ -136,6 +136,26 @@
     $('selFilter').value = '';
     fire($('selFilter'), 'change');
 
+    // レインボー表示：列の順番で色を付ける（パターン番号の列も1列）。コメント・テーブル名・空行には付けない
+    $('btnText').click();
+    $('text').value = '\uFEFF// c\n[t]\n {#|a|b@}\n1| x |\n\n';
+    fire($('text'), 'input');
+    const painted = () => [...q('#textHl pre').children].map(e => `${e.className}:${e.textContent}`);
+    result.steps.rainbow = {
+      on: $('textBox').classList.contains('rainbow'),
+      textColor: getComputedStyle($('text')).color,
+      overlay: getComputedStyle(q('#textHl')).display,
+      text: q('#textHl pre').textContent,
+      spans: painted(),
+    };
+    $('chkRainbow').click();
+    result.steps.rainbowOff = {
+      checked: $('chkRainbow').checked,
+      overlay: getComputedStyle(q('#textHl')).display,
+      saved: localStorage.getItem('dbjigu-fixture-editor.rainbow'),
+    };
+    $('chkRainbow').click();
+
     // テキスト表示では、一覧のクリックでテーブル名の行を選択する
     $('btnText').click();
     $('text').value = '[a]\n{x}\n1\n\n[b]\n{y}\n2\n';

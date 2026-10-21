@@ -121,6 +121,7 @@ A001|100|200|CANCELED|Express|-
   - The registered DDL is saved in the browser. Use "↻" to read the files again. If the browser can't save it, register it each time you open the editor.
 - The check results and patterns are shown in a side panel on the right. Close it with the buttons on the right edge to give the tables more room. In a narrow window, it opens over the tables.
 - With "桁揃え" (align) on, the `|` characters are lined up so the file is easy to read as text too. DbJigu trims every field, so the alignment does not change the meaning.
+- In the text view ("テキスト"), each column's values are shown in their own color, so you can follow a column down the rows. Turn it off with "列の色分け" (column colors).
 - It checks the file with the same rules DbJigu uses (for example, a row whose number of values doesn't match the header, or an empty pattern number such as `1,,2`) and shows the line numbers.
 - Choose a pattern number to dim the rows that are not part of it, and see how many rows each table has per pattern.
 - Paste a range copied from Excel into a cell, or copy a table as TSV to paste into Excel.

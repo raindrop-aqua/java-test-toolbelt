@@ -96,6 +96,7 @@ Users run DbJigu in Spring Boot + Spring Data JPA projects, so `src/test/java/co
 - Saving must never change what DbJigu reads. Aligned output pads fields with spaces and starts data rows with one space to line up with `{`; this is safe only because DbJigu trims every field.
 - A comment right after a data row belongs to that table (a commented-out row). A comment after a blank line belongs to the next table (a heading). This keeps comments where they were when the file is saved.
 - Pattern numbers are compared the same way as in DbJigu (`patternKey`), and the pattern filter shows each pattern as it was first written in the file.
+- The text view's column colors (`paintText`) are an overlay behind a textarea whose text is transparent, so input, IME, undo, and paste stay native. The overlay must keep the same font, line height, padding, and `tab-size` as `#text`, classify lines like `FixtureCore.parse` (trimmed first character), and paint only the lines near the visible range. While an IME is composing, the textarea's own text is shown instead.
 - Checks that DbJigu turns into exceptions are `error`. Things that work but are often a mistake are `warn`. A repeated column is only `info`, because it is correct in verify files (ranges).
 
 ### Decided not to do

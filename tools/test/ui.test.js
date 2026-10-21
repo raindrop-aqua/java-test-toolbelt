@@ -131,6 +131,20 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.equal(result.steps.namedAddRow, '[t]\n{#          |a}\n Gold       |1\n gold,SILVER|2\n            |3\n 02         |4\n Gold       |\n');
   });
 
+  test('テキスト表示で、列ごとに文字の色を変える', () => {
+    assert.deepEqual(result.steps.rainbow, {
+      on: true,
+      textColor: 'rgba(0, 0, 0, 0)',
+      overlay: 'block',
+      text: '\uFEFF// c\n[t]\n {#|a|b@}\n1| x |\n\n',
+      spans: [
+        'rb-sep:{', 'rb0:#', 'rb-sep:|', 'rb1:a', 'rb-sep:|', 'rb2:b@', 'rb-sep:}',
+        'rb0:1', 'rb-sep:|', 'rb1: x ', 'rb-sep:|', 'rb2:',
+      ],
+    });
+    assert.deepEqual(result.steps.rainbowOff, { checked: false, overlay: 'none', saved: '0' });
+  });
+
   test('列名の下に型を表示し、チェックボックスで切り替える', () => {
     assert.deepEqual(result.steps.types, { texts: ['VARCHAR(10) PK', 'VARCHAR(10) NN', 'VARCHAR(10) NN'], shown: 'block', hidden: 'none' });
   });
