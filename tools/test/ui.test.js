@@ -118,6 +118,20 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.equal(result.steps.namedAddRow, '[t]\n{#          |a}\n Gold       |1\n gold,SILVER|2\n            |3\n 02         |4\n Gold       |\n');
   });
 
+  test('テキスト表示で、列ごとに文字の色を変える', () => {
+    assert.deepEqual(result.steps.rainbow, {
+      on: true,
+      textColor: 'rgba(0, 0, 0, 0)',
+      overlay: 'block',
+      text: '\uFEFF// c\n[t]\n {#|a|b@}\n1| x |\n\n',
+      spans: [
+        'rb-sep:{', 'rb0:#', 'rb-sep:|', 'rb1:a', 'rb-sep:|', 'rb2:b@', 'rb-sep:}',
+        'rb0:1', 'rb-sep:|', 'rb1: x ', 'rb-sep:|', 'rb2:',
+      ],
+    });
+    assert.deepEqual(result.steps.rainbowOff, { checked: false, overlay: 'none', saved: '0' });
+  });
+
   test('書式の誤りがあると、テキストのまま誤りを表示する', () => {
     assert.equal(result.steps.fatal.mode, 'text');
     assert.match(result.steps.fatal.issues, /データの前に \{列名1\|列名2\} を記述してください/);

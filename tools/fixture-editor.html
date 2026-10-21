@@ -31,6 +31,8 @@
   --comment: #6b7a3a;
   --input-bg: #ffffff;
   --row-hover: #f2f5fa;
+  /* テキスト表示で列ごとに付ける色（レインボー表示）。背景に対するコントラスト比は 4.5 以上 */
+  --rb0: #1f5fbf; --rb1: #b45309; --rb2: #15803d; --rb3: #9333ea; --rb4: #0e7490; --rb5: #be185d;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "BIZ UDGothic", "MS Gothic", monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -52,6 +54,7 @@
     --comment: #b5c27a;
     --input-bg: #1a1b1e;
     --row-hover: #262a31;
+    --rb0: #79a8ff; --rb1: #f0a050; --rb2: #6fd28f; --rb3: #c9a0ff; --rb4: #5ccfe6; --rb5: #ff8fbf;
   }
 }
 :root[data-theme="dark"] {
@@ -72,6 +75,7 @@
   --comment: #b5c27a;
   --input-bg: #1a1b1e;
   --row-hover: #262a31;
+  --rb0: #79a8ff; --rb1: #f0a050; --rb2: #6fd28f; --rb3: #c9a0ff; --rb4: #5ccfe6; --rb5: #ff8fbf;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -172,11 +176,31 @@ tr.warn-row > td.rh { background: var(--warn-soft); border-left: 3px solid var(-
 
 #textView { display: none; }
 #text {
-  width: 100%; min-height: 70vh; resize: vertical; tab-size: 4;
+  display: block; width: 100%; min-height: 70vh; resize: vertical; tab-size: 4;
   font-family: var(--mono); font-size: 13px; line-height: 1.6;
   background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
 }
 .text-tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+/* レインボー表示：文字を透明にした textarea の後ろに、色を付けた同じテキストを重ねる。
+   入力・IME・元に戻す・貼り付けは textarea のまま。重ねる要素はフォント・行の高さ・余白を textarea とそろえる */
+.text-box { position: relative; }
+.text-hl {
+  display: none; position: absolute; top: 1px; left: 1px; overflow: hidden; pointer-events: none;
+  background: var(--input-bg); border-radius: 7px;
+}
+.text-hl pre {
+  margin: 0; padding: 10px 12px; white-space: pre; tab-size: 4; color: var(--text);
+  font-family: var(--mono); font-size: 13px; line-height: 1.6;
+}
+.text-box.rainbow .text-hl { display: block; }
+.text-box.rainbow #text { position: relative; background: transparent; color: transparent; caret-color: var(--text); }
+.text-box.rainbow #text::selection { color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+/* 変換中は textarea の文字をそのまま見せる（変換中の文字の下線などをブラウザに描かせる） */
+.text-box.rainbow.composing #text { color: var(--text); }
+.text-box.rainbow.composing .text-hl pre { visibility: hidden; }
+.rb-sep { color: var(--muted); }
+.rb0 { color: var(--rb0); } .rb1 { color: var(--rb1); } .rb2 { color: var(--rb2); }
+.rb3 { color: var(--rb3); } .rb4 { color: var(--rb4); } .rb5 { color: var(--rb5); }
 
 aside { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 80px); overflow: auto; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
@@ -255,9 +279,15 @@ body.dragging #dropHint { display: flex; }
     <div id="textView">
       <div class="text-tools">
         <button id="btnFormat">整形</button>
+        <label class="check" title="列ごとに文字の色を変えて、どの値がどの列のものかを見分けやすくする">
+          <input type="checkbox" id="chkRainbow"> 列の色分け
+        </label>
         <span>テキストを直接編集できます。「表」に戻ると内容を読み込み直します。</span>
       </div>
-      <textarea id="text" spellcheck="false" wrap="off"></textarea>
+      <div id="textBox" class="text-box">
+        <div id="textHl" class="text-hl" aria-hidden="true"><pre></pre></div>
+        <textarea id="text" spellcheck="false" wrap="off"></textarea>
+      </div>
     </div>
   </main>
   <aside>
@@ -284,6 +314,7 @@ body.dragging #dropHint { display: flex; }
           <li><kbd>Alt+N</kbd> 値を <code>&lt;null&gt;</code> にする / 戻す</li>
           <li>Excel などからコピーした表（タブ区切り）は、セルに貼り付けると複数のセルに展開される。列名の欄に貼ると列名になる。</li>
           <li>行と列の操作ボタン（移動・追加・複製・コメント化・削除）は、ツールバーの「行・列の操作」で表示・非表示を切り替えられる。</li>
+          <li>テキスト表示では、列ごとに文字の色を変える。「列の色分け」で切り替えられる。</li>
           <li>ファイルはこの画面にドラッグ＆ドロップしても開ける。</li>
           <li>Chrome / Edge では、開いたファイルにそのまま上書き保存できる。他のブラウザではダウンロードになる。</li>
         </ul>
@@ -673,6 +704,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   const $ = id => document.getElementById(id);
   const ALIGN_KEY = 'dbjigu-fixture-editor.align';
   const TOOLS_KEY = 'dbjigu-fixture-editor.tools';
+  const RAINBOW_KEY = 'dbjigu-fixture-editor.rainbow';
 
   const state = {
     doc: null,
@@ -682,6 +714,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     mode: 'grid',
     align: true,
     showTools: true,
+    rainbow: true,
     filter: null,
     undo: [],
     redo: [],
@@ -694,6 +727,8 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     if (saved != null) state.align = saved === '1';
     const tools = localStorage.getItem(TOOLS_KEY);
     if (tools != null) state.showTools = tools === '1';
+    const rainbow = localStorage.getItem(RAINBOW_KEY);
+    if (rainbow != null) state.rainbow = rainbow === '1';
   } catch (e) { /* 保存できない環境では既定値を使う */ }
 
   // ---------- モデルの操作 ----------
@@ -775,12 +810,15 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     $('chkAlign').checked = state.align;
     $('chkTools').checked = state.showTools;
     document.body.classList.toggle('show-tools', state.showTools);
+    $('chkRainbow').checked = state.rainbow;
     $('btnUndo').disabled = state.mode !== 'grid' || !state.undo.length;
     $('btnRedo').disabled = state.mode !== 'grid' || !state.redo.length;
     renderFileName();
     if (state.mode === 'grid') {
       renderGrid();
       if (focus) restoreFocus(focus);
+    } else {
+      paintText(true);
     }
     runLint();
   }
@@ -1394,6 +1432,62 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
     ta.scrollTop = Math.max(0, (line - 5) * lh);
   }
 
+  // ---------- レインボー表示 ----------
+
+  const RAINBOW_COLORS = 6;
+  const sepHtml = t => `<span class="rb-sep">${t}</span>`;
+  const paintFields = parts => parts.map((p, i) => `<span class="rb${i % RAINBOW_COLORS}">${esc(p)}</span>`).join(sepHtml('|'));
+
+  // 1行を、列の順番で色を付けた HTML にする。行の種類は FixtureCore.parse と同じく、トリムした先頭の文字で見分ける。
+  // パターン番号の列（#）も1列として数える。コメント・テーブル名・空行には色を付けない
+  function rainbowLine(raw, first) {
+    let t = C.jtrim(raw);
+    if (first && t.startsWith('\uFEFF')) t = C.jtrim(t.slice(1));
+    if (t === '' || t.startsWith('//') || t.startsWith('[')) return esc(raw);
+    if (!t.startsWith('{')) return paintFields(raw.split('|'));
+    const open = raw.indexOf('{');
+    const close = t.endsWith('}') ? raw.lastIndexOf('}') : -1;
+    const head = esc(raw.slice(0, open)) + sepHtml('{');
+    if (close < 0) return head + paintFields(raw.slice(open + 1).split('|'));
+    return head + paintFields(raw.slice(open + 1, close).split('|')) + sepHtml('}') + esc(raw.slice(close + 1));
+  }
+
+  // 入力のたびに全体を塗ると大きなファイルで重くなるので、見えている範囲の前後だけを塗る。
+  // それより前の行は空行にして、行の位置を textarea とそろえる
+  let textLines = [];
+  function paintText(reread) {
+    $('textBox').classList.toggle('rainbow', state.rainbow);
+    if (!state.rainbow || state.mode !== 'text') return;
+    const ta = $('text');
+    if (reread) textLines = ta.value.split('\n');
+    const hl = $('textHl');
+    hl.style.width = ta.clientWidth + 'px';
+    hl.style.height = ta.clientHeight + 'px';
+    const lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+    const from = Math.min(textLines.length, Math.max(0, Math.floor(ta.scrollTop / lh) - 10));
+    const to = Math.min(textLines.length, from + Math.ceil(ta.clientHeight / lh) + 20);
+    const painted = [];
+    for (let i = from; i < to; i++) painted.push(rainbowLine(textLines[i], i === 0));
+    const pre = hl.firstElementChild;
+    pre.innerHTML = '\n'.repeat(from) + painted.join('\n');
+    pre.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
+  }
+
+  $('text').addEventListener('scroll', () => paintText(false));
+  $('text').addEventListener('compositionstart', () => $('textBox').classList.add('composing'));
+  $('text').addEventListener('compositionend', () => {
+    $('textBox').classList.remove('composing');
+    paintText(true);
+  });
+  // textarea の大きさが変わったとき（右下のつまみ、ウィンドウの幅）
+  new ResizeObserver(() => paintText(false)).observe($('text'));
+
+  $('chkRainbow').addEventListener('change', e => {
+    state.rainbow = e.target.checked;
+    try { localStorage.setItem(RAINBOW_KEY, state.rainbow ? '1' : '0'); } catch (err) { /* 無視 */ }
+    paintText(true);
+  });
+
   // ---------- 表示の切り替え ----------
 
   // テキスト表示に切り替えたときの内容。変更が無ければ、表に戻るときに読み込み直さない
@@ -1429,6 +1523,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
   $('btnGrid').addEventListener('click', toGrid);
   $('btnText').addEventListener('click', toText);
   $('text').addEventListener('input', () => {
+    paintText(true);
     setDirty();
     scheduleLint();
   });
@@ -1439,6 +1534,7 @@ if (typeof module !== 'undefined') module.exports = FixtureCore;
       return;
     }
     $('text').value = C.serialize(parsed.doc, { align: state.align });
+    paintText(true);
     setDirty();
     runLint();
   });

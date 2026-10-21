@@ -88,6 +88,26 @@ test.describe('IME での入力', { skip }, () => {
     assert.equal(await text(), '[table_name]\n{col1|col2}\n 漢  |\n     |\n');
   });
 
+  test('テキスト表示の色分けは、変換中は textarea の文字を見せ、確定すると色を付け直す', async () => {
+    await page.evaluate(`(() => {
+      document.getElementById('btnText').click();
+      const ta = document.getElementById('text');
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    })()`);
+    const shown = () => page.evaluate(`(() => ({
+      composing: document.getElementById('textBox').classList.contains('composing'),
+      textColor: getComputedStyle(document.getElementById('text')).color !== 'rgba(0, 0, 0, 0)',
+      last: [...document.querySelectorAll('#textHl pre span')].pop().textContent,
+    }))()`);
+    await page.send('Input.imeSetComposition', { text: 'あ', selectionStart: 1, selectionEnd: 1 });
+    const during = await shown();
+    await page.send('Input.insertText', { text: '亜' });
+    assert.equal(during.composing, true);
+    assert.equal(during.textColor, true, '変換中は textarea の文字が見える');
+    assert.deepEqual(await shown(), { composing: false, textColor: false, last: '亜' });
+  });
+
   test('列名の欄でも、変換を確定する Enter ではフォーカスを外さない', async () => {
     await page.evaluate(`document.querySelector('input.cname[data-f="0"]').select()`);
     await composeAndCommit('しめい', 'Enter');
