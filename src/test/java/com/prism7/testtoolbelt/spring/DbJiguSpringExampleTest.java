@@ -5,6 +5,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.datasource.DataSourceUtils;
@@ -29,7 +30,10 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>JPA の変更は flush するまでDBに書かれないため、検証の前に {@code entityManager.flush()} を呼ぶ。</li>
  * </ul>
  * テーブルは {@code @Sql} でテストのトランザクション内に作成するため、テーブルごとロールバックされる。
+ * H2 は DDL をトランザクションに含めず、テーブルがロールバックされないため、この例は H2 では実行しない。
  */
+@DisabledIfSystemProperty(named = "dbjigu.url", matches = "jdbc:h2:.*",
+        disabledReason = "H2 では CREATE TABLE がロールバックされない")
 @SpringBootTest
 @Transactional
 @Sql("/schema/postgresql.sql")

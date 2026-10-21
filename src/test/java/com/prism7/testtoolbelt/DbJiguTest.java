@@ -26,10 +26,13 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * PostgreSQL に接続してテストする。
  * テーブルの作成からトランザクション内で行い、終了時にロールバックするため、DBには何も残らない。
+ * {@code -Pdbjigu.url=jdbc:h2:mem:test} で H2 のインメモリ DB でも実行できる。H2 は DDL をロールバックしないが、
+ * 接続を閉じると DB ごと消えるため、テストごとに空の状態から始まる。
  */
 class DbJiguTest {
 
@@ -355,11 +358,37 @@ class DbJiguTest {
             assertEquals(matches, method.invoke(null, operator, expected, actual));
         }
 
+        // H2 と Oracle の CLOB は LOB 列として報告されるため、LOB 列の経路を通して確かめる（PostgreSQL には CLOB 型がない）
+        @Test
+        void LOB列は記号の意味どおりに比較する(@TempDir Path dir) throws SQLException {
+            String product = connection.getMetaData().getDatabaseProductName();
+            assumeTrue(product.equals("H2") || product.equals("Oracle"), product + " には CLOB 型がない");
+            update("CREATE TABLE ClobTable (id INTEGER, val CLOB)");
+            String file = write(dir, "[ClobTable]", "{id|val}", "1|abc", "2|<null>", "3|a_%!c");
+            assertEquals(3, jigu.importFrom(file));
+            jigu.assertExists(file);
+
+            jigu.assertExists(write(dir, "[ClobTable]", "{id|val%}", "1|ab", "3|a_%"));
+            jigu.assertExists(write(dir, "[ClobTable]", "{id|val!=}", "1|abd", "2|abc", "3|<null>"));
+            assertEquals(2, jigu.verifyExists(write(dir, "[ClobTable]", "{id|val!=}", "1|abc", "2|<null>")));
+            assertEquals(1, jigu.verifyExists(write(dir, "[ClobTable]", "{id|val%}", "1|b")));
+
+            String error = assertThrows(AssertionError.class,
+                    () -> jigu.assertExists(write(dir, "[ClobTable]", "{id|val}", "1|abd"))).getMessage();
+            assertTrue(error.contains("val を除くと一致する行があります。DB の値: abc"), error);
+
+            IllegalArgumentException ordering = assertThrows(IllegalArgumentException.class,
+                    () -> jigu.verifyExists(write(dir, "[ClobTable]", "{id|val>=}", "1|abc")));
+            assertTrue(ordering.getMessage().contains("LOB 列は大小比較できません"), ordering.getMessage());
+        }
+
         @Test
         void 検証のSQLエラーにはファイル名と行番号を含める(@TempDir Path dir) {
-            String file = write(dir, "[Member]", "{MemberId|MemberName>=}", "1|a", "2|b");
-            // 列の型は取得できるが、比較できない演算子にするため varchar の列を json 型に変える
-            update("ALTER TABLE Member ALTER COLUMN MemberName TYPE json USING to_json(MemberName)");
+            String file = write(dir, "[ArrayTable]", "{id|val>=}", "1|a", "2|b");
+            // 列の型は取得できるが、文字列と比較できない配列の列にする。PostgreSQL でも H2 でも同じ SQL で作れる。
+            // H2 は行がないと比較しないため、1行入れておく
+            update("CREATE TABLE ArrayTable (id INTEGER, val VARCHAR(30) ARRAY)");
+            update("INSERT INTO ArrayTable (id, val) VALUES (1, ARRAY['a'])");
             IllegalStateException error = assertThrows(IllegalStateException.class, () -> jigu.verifyExists(file));
             assertTrue(error.getMessage().startsWith(file + ":3 "), error.getMessage());
         }

@@ -102,6 +102,22 @@ A001|100|200|CANCELED|Express|-
 - How strings sort depends on the database's collation, so use `<`, `>`, and the other ordering marks mainly for numbers and dates.
 - LOB columns can't use `<`, `<=`, `>`, or `>=`.
 
+## Databases
+
+DbJigu uses no database-specific SQL. Its tests run on these databases:
+
+| Database | Status |
+|---|---|
+| PostgreSQL 17 | Tested automatically (GitHub Actions). The main target. |
+| H2 2.x, in-memory (default mode and `MODE=PostgreSQL`) | Tested automatically (GitHub Actions). |
+| Oracle | Used in projects, but not tested automatically. |
+
+Notes on H2:
+
+- H2 does not include DDL in the transaction. `CREATE TABLE` is committed at once and is not rolled back. Data imported by DbJigu is rolled back as usual. An in-memory database disappears when its last connection is closed, so if each test opens and closes its own connection (as in the guide's example), every test starts empty. With a connection pool (as in Spring) or `DB_CLOSE_DELAY=-1`, the database lives on, so create the tables once (for example with `schema.sql`) instead of in each test.
+- H2 and PostgreSQL differ in some database behavior, such as rounding, string comparison, and types (`TEXT` is `VARCHAR`, and H2 has `CLOB`). A test that passes on H2 may fail on PostgreSQL. DbJigu does not hide these differences.
+- Other H2 modes, such as `MODE=Oracle`, are not tested.
+
 ## Fixture editor
 
 [`tools/fixture-editor.html`](tools/fixture-editor.html) edits fixtures as tables. Download the file and open it in a browser. It needs no installation and sends nothing over the network.
@@ -153,7 +169,14 @@ The fixture editor's tests need only Node.js 22 or later (and Chrome for the UI 
 node --test tools/test/*.test.js
 ```
 
-GitHub Actions runs the same tests on every pull request and every push to `main` ([.github/workflows/build.yml](.github/workflows/build.yml)).
+To run the tests on H2 (in-memory) instead, no database is needed. The Spring example is skipped on H2, because it creates its tables inside the test transaction:
+
+```bash
+./gradlew build -Pdbjigu.url=jdbc:h2:mem:test
+./gradlew build '-Pdbjigu.url=jdbc:h2:mem:test;MODE=PostgreSQL'
+```
+
+GitHub Actions runs the same tests, on PostgreSQL and on H2, on every pull request and every push to `main` ([.github/workflows/build.yml](.github/workflows/build.yml)).
 
 ## License
 

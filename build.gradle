@@ -20,6 +20,8 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'org.postgresql:postgresql:42.7.14'
+    // H2（インメモリ）でも動くかを確かめるため。-Pdbjigu.url=jdbc:h2:mem:test で切り替える
+    testRuntimeOnly 'com.h2database:h2:2.5.252'
 
     // Spring での利用例（spring パッケージ）のためだけに使う。DbJigu.java は Spring に依存しない
     testImplementation platform('org.springframework.boot:spring-boot-dependencies:4.1.1')
