@@ -48,6 +48,10 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.deepEqual(result.steps.loaded, { sections: 2, status: '✓ 問題なし' });
   });
 
+  test('テーブルの一覧を、ファイルの順に行数とともに表示する', () => {
+    assert.deepEqual(result.steps.tables, [['1.', 'customer', '', '2 行'], ['2.', 'product', '', '1 行']]);
+  });
+
   test('行・列の操作ボタンの表示を切り替える（既定は表示。行番号は常に表示）', () => {
     const visible = { checked: true, rowTools: 'inline-flex', colTools: 'flex', lineNumber: 'inline-block' };
     assert.deepEqual(result.steps.tools, {
@@ -94,7 +98,12 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
   });
 
   test('パターンで絞り込む', () => {
-    assert.deepEqual(result.steps.filter, { options: ['', '1', '2', '3'], dimRows: 2 });
+    assert.deepEqual(result.steps.filter, {
+      options: ['', '1', '2', '3'],
+      dimRows: 2,
+      // 絞り込み中は、そのパターンで使う行（共通の行を含む）の数 / すべての行の数
+      tables: [['1.', 'customer', '', '1 / 3 行'], ['2.', 'product', '', '2 / 2 行']],
+    });
   });
 
   test('元に戻す・やり直す', () => {
@@ -106,7 +115,11 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
   });
 
   test('列数が合わない行を修正する', () => {
-    assert.deepEqual(result.steps.mismatch, { status: 'エラー 1 / 警告 0', missingCells: 2 });
+    assert.deepEqual(result.steps.mismatch, {
+      status: 'エラー 1 / 警告 0',
+      missingCells: 2,
+      tables: [['1.', 't', 'エラー 1', '1 行']],
+    });
     assert.deepEqual(result.steps.fixed, { status: '✓ 問題なし', text: '[t]\n{a|b|c}\n 1| |\n' });
   });
 
@@ -132,8 +145,77 @@ test.describe('画面の操作', { skip: chrome ? false : 'Chrome が見つか�
     assert.deepEqual(result.steps.rainbowOff, { checked: false, overlay: 'none', saved: '0' });
   });
 
+  test('列名の下に型を表示し、チェックボックスで切り替える', () => {
+    assert.deepEqual(result.steps.types, { texts: ['VARCHAR(10) PK', 'VARCHAR(10) NN', 'VARCHAR(10) NN'], shown: 'block', hidden: 'none' });
+  });
+
+  test('列名の候補は、まだ書いていない列を型とともに出し、選ぶと型の行も変わる', () => {
+    assert.deepEqual(result.steps.columnSuggest, ['created_atTIMESTAMP NN', 'noteVARCHAR(100)']);
+    assert.deepEqual(result.steps.columnChosen, {
+      name: 'created_at',
+      types: ['VARCHAR(10) PK', 'VARCHAR(10) NN', 'VARCHAR(10) NN', 'TIMESTAMP NN'],
+    });
+  });
+
+  test('値が列の型に合わなければ、セルを警告の色にする', () => {
+    assert.deepEqual(result.steps.valueType, { cell: true, title: '列 created_at（TIMESTAMP）：存在しない日付です' });
+  });
+
+  test('テキスト表示では、一覧のクリックでテーブル名の行を選択する', () => {
+    assert.equal(result.steps.textJump, '[b]');
+  });
+
+  test('DDL を貼り付けて登録する（#29）', () => {
+    assert.deepEqual(result.steps.schemaLoaded, { summary: '貼り付け', counts: '2 テーブル・無視した文 1 件' });
+  });
+
+  test('スキーマタブ：入力中のテーブルの列を、ファイルにあるか・必須か・今の列かとともに表示する', () => {
+    assert.deepEqual(result.steps.schemaView, {
+      head: 'orders',
+      // 親の customer がファイルで後ろにある
+      fk: ['FK (customer_id) → customer（先に投入）'],
+      cols: [
+        '✓ order_no VARCHAR(10) PK',
+        '⚠ customer_id VARCHAR(10) NN',
+        '▶ status VARCHAR(10) NN',
+        '· note VARCHAR(100)',
+        // 既定値があるので必須ではない
+        '· created_at TIMESTAMP NN',
+      ],
+      notes: ['列 memo はスキーマにありません。'],
+    });
+  });
+
+  test('スキーマと照らし合わせて、投入の順序、スキーマに無い列、無い必須の列を警告する', () => {
+    assert.deepEqual(result.steps.schemaIssues, [
+      '警告L1 [orders] 外部キーの親 customer がこのテーブルより後にあります（投入すると失敗します。検証用のファイルなら問題ありません）',
+      '警告L2 [orders] 列 memo は orders のスキーマにありません',
+      '警告L2 [orders] 必須の列 customer_id がありません（投入すると失敗します。検証用のファイルなら問題ありません）',
+      '警告L7 [customer] 必須の列 customer_name がありません（投入すると失敗します。検証用のファイルなら問題ありません）',
+    ]);
+  });
+
+  test('スキーマタブ：列のクリックで表のその列へ、外部キーのクリックで親の定義へ移動する', () => {
+    assert.deepEqual(result.steps.schemaJump, { s: '0', r: '1', f: '0' });
+    assert.equal(result.steps.schemaParent, 'customer');
+  });
+
+  test('スキーマタブ：列名でも検索でき、追従を止められ、無いテーブル名には近い名前を示す', () => {
+    assert.deepEqual(result.steps.schemaSearch, ['customercustomer_id', 'orderscustomer_id']);
+    assert.equal(result.steps.schemaPinned, 'orders', '追従を止めると表示は変わらない');
+    assert.equal(result.steps.schemaFollow, 'customer', '追従を再開すると入力中のテーブルを表示する');
+    assert.equal(result.steps.schemaUnknown, 'スキーマにありません。近い名前：customer');
+  });
+
+  test('テーブル名の候補を選び、必須の列だけを展開する', () => {
+    assert.deepEqual(result.steps.suggest, ['orders5 列']);
+    assert.deepEqual(result.steps.expandChoices, ['全列 5', '必須の列だけ 3', '主キーだけ 1', '展開しない']);
+    assert.match(result.steps.expanded, /\n\n\[orders\]\n\{order_no\|customer_id\|status\}\n {9}\| {11}\|\n$/);
+  });
+
   test('書式の誤りがあると、テキストのまま誤りを表示する', () => {
     assert.equal(result.steps.fatal.mode, 'text');
     assert.match(result.steps.fatal.issues, /データの前に \{列名1\|列名2\} を記述してください/);
+    assert.equal(result.steps.fatal.tables, '書式の誤りがあるため、表示できません');
   });
 });
