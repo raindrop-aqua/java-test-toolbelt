@@ -721,6 +721,58 @@ src/test/resources/data/order/
 
 ファイルのパスは、テストを実行するときの作業ディレクトリ（Gradle や Maven ではプロジェクトのルート）からの相対パスです。
 
+### 投入と期待を1つのファイルに並べる
+
+投入の行と期待の行を同じファイルに上下に並べ、別々のパターン名を付けて使い分ける書き方もできます。投入には `INPUT001`、検証には `OUTPUT001` のように、テストで別のパターン名を渡します。
+
+[restock/cases.txt](../src/test/resources/data/order/restock/cases.txt)
+
+```
+[product]
+{#|product_code|product_name|unit_price|stock}
+// 入荷しない商品：投入にも検証にも使う
+|P003|消しゴム|80|10
+// 入荷前の在庫：どちらのケースでも同じ
+INPUT001,INPUT002|P001|ボールペン|120|100
+INPUT001,INPUT002|P002|ノート|300|50
+// ケース1：P002 に 30 個入荷する
+OUTPUT001|P001|ボールペン|120|100
+OUTPUT001|P002|ノート|300|80
+// ケース2：P001 に 20 個入荷する
+OUTPUT002|P001|ボールペン|120|120
+OUTPUT002|P002|ノート|300|50
+```
+
+```java
+@ParameterizedTest(name = "{0} → {1}: {2} を {3} 個入荷", quoteTextArguments = false)
+@CsvSource(delimiter = '|', textBlock = """
+        INPUT001 | OUTPUT001 | P002 | 30
+        INPUT002 | OUTPUT002 | P001 | 20
+        """)
+void 入荷すると在庫が増える_投入と期待を1ファイルに(String input, String output, String productCode, int quantity)
+        throws SQLException {
+    // Given
+    jigu.importFrom(DATA + "restock/cases.txt", input);
+
+    // When
+    service.restock(productCode, quantity);
+
+    // Then
+    jigu.assertExists(DATA + "restock/cases.txt", output);
+}
+```
+
+- 投入の行と期待の行が上下に並ぶので、処理で変わる値（ケース1なら `P002` の在庫 50 → 80）を見比べやすくなります。
+- ケースを足すときは、ファイルに行を書き、`@CsvSource` に引数を1行足すだけで、テストのコードはそのままです。
+- 変わらない行は、パターンを空にした共通の行にできます。共通の行は投入にも検証にも使われるので、上の例の `P003` は投入され、入荷の後も変わっていないことまで確かめられます。
+- `INPUT001,INPUT002` のように書くと、投入の行を複数のケースで共有できます。
+- 列名の記号（`@`、`>` など）は投入では無視されます。比較しない列に `@` を付けても、その列の値は投入されます。
+
+注意すること：
+
+- 共通の行があるファイルで `assertNotExists` にパターンを渡すと、共通の行も「あってはいけない行」として対象になり、失敗します。あってはいけない行は、これまでどおり別のファイルに書いてください。
+- 同じ列を2回書く範囲の指定（`{amount>=|amount<}`、[3.2](#32-列名の記号検証のとき)）は、投入では「投入では同じ列を2回書けません」というエラーになるので、このファイルでは使えません。範囲で確かめたいときは、検証のファイルを分けてください。
+
 ### 投入順と外部キー
 
 テーブルはファイルに書いた順に投入します。親テーブルを先に書いてください。

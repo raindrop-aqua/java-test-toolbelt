@@ -75,6 +75,24 @@ class OrderServiceTest {
         jigu.assertExists(DATA + "restock/expected.txt");
     }
 
+    // 投入と期待を1つのファイルに並べ、投入と検証で別のパターン名を渡す
+    @ParameterizedTest(name = "{0} → {1}: {2} を {3} 個入荷", quoteTextArguments = false)
+    @CsvSource(delimiter = '|', textBlock = """
+            INPUT001 | OUTPUT001 | P002 | 30
+            INPUT002 | OUTPUT002 | P001 | 20
+            """)
+    void 入荷すると在庫が増える_投入と期待を1ファイルに(String input, String output, String productCode, int quantity)
+            throws SQLException {
+        // Given
+        jigu.importFrom(DATA + "restock/cases.txt", input);
+
+        // When
+        service.restock(productCode, quantity);
+
+        // Then
+        jigu.assertExists(DATA + "restock/cases.txt", output);
+    }
+
     @Nested
     class 注文する {
 
