@@ -721,6 +721,58 @@ src/test/resources/data/order/
 
 File paths are relative to the working directory of the test run (the project root for Gradle and Maven).
 
+### Putting import and expected rows in one file
+
+You can also put the rows to insert and the expected rows in the same file, one above the other, and tell them apart by pattern names. The test passes one name, such as `INPUT001`, when importing, and another, such as `OUTPUT001`, when verifying.
+
+[restock/cases.txt](../src/test/resources/data/order/restock/cases.txt)
+
+```
+[product]
+{#|product_code|product_name|unit_price|stock}
+// 入荷しない商品：投入にも検証にも使う
+|P003|消しゴム|80|10
+// 入荷前の在庫：どちらのケースでも同じ
+INPUT001,INPUT002|P001|ボールペン|120|100
+INPUT001,INPUT002|P002|ノート|300|50
+// ケース1：P002 に 30 個入荷する
+OUTPUT001|P001|ボールペン|120|100
+OUTPUT001|P002|ノート|300|80
+// ケース2：P001 に 20 個入荷する
+OUTPUT002|P001|ボールペン|120|120
+OUTPUT002|P002|ノート|300|50
+```
+
+```java
+@ParameterizedTest(name = "{0} → {1}: {2} を {3} 個入荷", quoteTextArguments = false)
+@CsvSource(delimiter = '|', textBlock = """
+        INPUT001 | OUTPUT001 | P002 | 30
+        INPUT002 | OUTPUT002 | P001 | 20
+        """)
+void 入荷すると在庫が増える_投入と期待を1ファイルに(String input, String output, String productCode, int quantity)
+        throws SQLException {
+    // Given
+    jigu.importFrom(DATA + "restock/cases.txt", input);
+
+    // When
+    service.restock(productCode, quantity);
+
+    // Then
+    jigu.assertExists(DATA + "restock/cases.txt", output);
+}
+```
+
+- The rows before and after sit one above the other, so it is easy to see which values the code changes (in case 1, the stock of `P002` goes from 50 to 80).
+- To add a case, write its rows in the file and add one line of arguments to `@CsvSource`. The test code stays the same.
+- Rows that don't change can be common rows with an empty pattern field. Common rows are used both for importing and for verifying, so `P003` above is inserted, and the test also checks that restocking left it unchanged.
+- Writing `INPUT001,INPUT002` shares an import row between several cases.
+- Column marks (`@`, `>`, and so on) are ignored when importing. A column marked `@` so that it is not compared is still inserted.
+
+Things to watch out for:
+
+- In a file with common rows, passing a pattern to `assertNotExists` also checks the common rows as rows that must not exist, so it fails. Keep rows that must not exist in a separate file, as before.
+- Writing a column twice for a range (`{amount>=|amount<}`, see [3.2](#32-column-marks-verification-only)) fails on import with the error "投入では同じ列を2回書けません", so it can't be used in this file. To check a range, use a separate verify file.
+
 ### Import order and foreign keys
 
 Tables are inserted in the order they appear in the file. Write parent tables first.
