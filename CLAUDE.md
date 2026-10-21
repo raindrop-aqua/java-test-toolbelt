@@ -70,6 +70,14 @@ Users run DbJigu in Spring Boot + Spring Data JPA projects, so `src/test/java/co
 - The Spring section quotes `spring/DbJiguSpringExampleTest`.
 - When DbJigu's behavior, fixture format, or error messages change, update the guide as well as the README and Javadoc.
 
+## Slides
+
+`docs/slides/` holds three Japanese PowerPoint decks: `dbjigu-for-developers.pptx` (#47: use cases and how to write tests), `dbjigu-for-managers.pptx` (#48: benefits, costs, and risks for deciding whether to adopt DbJigu), and `fixture-editor.pptx` (#52: the fixture editor, with screenshots). They are PowerPoint so people can edit them by hand, and the `.pptx` files are the source: no generator script is kept in the repo.
+
+- Keep them in sync like the guide. When DbJigu's behavior, fixture format, error messages, or the code and fixtures quoted from `example/OrderServiceTest` and `src/test/resources/data/order/` change, update the developer deck. When the fixture editor's features or screen change, update its deck and retake the screenshots (they were taken in headless Chrome, in the light color scheme, with `data/order/` and `schema/order.sql`). Update the manager deck when a benefit, cost, or limitation it lists changes.
+- The decks are mostly opened on Windows. Use only Meiryo (`メイリオ`) for text and Consolas for code: both ship with Windows and with Office for Mac. Set the theme's East Asian font (`ea` and the `Jpan` script font) to Meiryo too, mark text as `ja-JP` so Japanese line breaking applies, and avoid symbols that fall back to an emoji font (such as ⚠).
+- State only what the code and README actually do, and don't overstate benefits in the manager deck.
+
 ## Fixture editor
 
 `tools/fixture-editor.html` is a browser tool for editing fixtures as tables. Like `DbJigu.java`, it is meant to be copied, so it stays one self-contained HTML file: no external scripts, styles, fonts, or network access, and it works when opened from `file://`. The UI text is Japanese. The README's "Fixture editor" section and the guide's Tips describe it for users; keep them in sync with what it does.
