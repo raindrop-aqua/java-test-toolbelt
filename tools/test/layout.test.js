@@ -40,6 +40,9 @@ test.describe('画面の配置', { skip }, () => {
   async function open(width, height) {
     page = await openPage(chrome, pathToFileURL(EDITOR).href);
     await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    // 幅の変化（matchMedia の change）は次の描画のときに届き、サイドパネルはそこで開閉する。
+    // 2フレーム待って、新しい幅に合わせ終わってから測る（#55）
+    await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     await page.evaluate(`(() => {
       document.getElementById('btnText').click();
       document.getElementById('text').value = ${JSON.stringify(FIXTURE)};
